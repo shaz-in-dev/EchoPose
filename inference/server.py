@@ -54,8 +54,33 @@ app.add_middleware(
 
 estimator = PoseEstimator()
 skeleton_filter = SkeletonFilter(alpha=0.4)
-# All connected UI clients
-_ui_clients: list[WebSocket] = []
+class ConnectionManager:
+    """Thread-safe WebSocket connection manager."""
+    def __init__(self):
+        self.active_connections: set[WebSocket] = set()
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active_connections.add(ws)
+
+    def disconnect(self, ws: WebSocket):
+        self.active_connections.discard(ws)
+
+    async def broadcast(self, message: str):
+        dead_connections = set()
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception:
+                dead_connections.add(connection)
+        for dead in dead_connections:
+            self.disconnect(dead)
+
+    @property
+    def count(self):
+        return len(self.active_connections)
+
+manager = ConnectionManager()
 
 
 import logging
@@ -104,14 +129,7 @@ async def aggregator_loop():
                         })
 
                         # Broadcast to all connected UI clients
-                        dead = []
-                        for client in _ui_clients:
-                            try:
-                                await client.send_text(payload)
-                            except Exception:
-                                dead.append(client)
-                        for d in dead:
-                            _ui_clients.remove(d)
+                        await manager.broadcast(payload)
 
                     except json.JSONDecodeError:
                         logger.warning("Malformed JSON received from aggregator. Skipping frame.")
@@ -132,21 +150,20 @@ async def startup():
 # ── UI WebSocket endpoint ─────────────────────────────────────────
 @app.websocket("/ws/pose")
 async def ws_pose(ws: WebSocket):
-    await ws.accept()
-    _ui_clients.append(ws)
-    logger.info(f"UI client connected. Total: {len(_ui_clients)}")
+    await manager.connect(ws)
+    logger.info(f"UI client connected. Total: {manager.count}")
     try:
         while True:
             await ws.receive_text()   # keep-alive
     except WebSocketDisconnect:
-        _ui_clients.remove(ws)
-        logger.info(f"UI client disconnected. Total: {len(_ui_clients)}")
+        manager.disconnect(ws)
+        logger.info(f"UI client disconnected. Total: {manager.count}")
 
 
 # ── REST ──────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    return {"status": "ok", "ui_clients": len(_ui_clients)}
+    return {"status": "ok", "ui_clients": manager.count}
 
 
 if __name__ == "__main__":
