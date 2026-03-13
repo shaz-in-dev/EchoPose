@@ -31,7 +31,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from pipeline.fusion import process_bundle
+from pipeline.fusion import FusionPipeline
 from pipeline.pose   import PoseEstimator
 from pipeline.filter import SkeletonFilter
 
@@ -47,7 +47,9 @@ DEVICE         = os.getenv("INFERENCE_DEVICE", "auto")
 app = FastAPI(title="RF-Mesh Inference", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+    allow_origins=["http://localhost:8000", "http://localhost:8080", "http://127.0.0.1:8000", "http://127.0.0.1:8080"], # Restricted for production security
+    allow_methods=["GET", "POST", "OPTIONS"], 
+    allow_headers=["*"]
 )
 
 estimator = PoseEstimator()
@@ -81,33 +83,40 @@ logger.addHandler(console_handler)
 # ── Background task: pull from aggregator, infer, broadcast ──────
 async def aggregator_loop():
     """Connects to the Rust aggregator WS and runs inference on each bundle."""
+    fusion_pipeline = FusionPipeline()  # Thread-safe pipeline per worker
     backoff = 1.0
     while True:
         try:
-            async with websockets.connect(AGGREGATOR_WS, ping_interval=None, ping_timeout=None) as ws:
+            async with websockets.connect(AGGREGATOR_WS, ping_interval=20, ping_timeout=20, open_timeout=10) as ws:
                 logger.info(f"Connected to aggregator @ {AGGREGATOR_WS}")
                 backoff = 1.0
                 async for raw in ws:
-                    bundle = json.loads(raw)
-                    features  = process_bundle(bundle)
-                    keypoints = estimator.predict(features)
-                    smoothed_keypoints = skeleton_filter.filter(keypoints)
+                    try:
+                        bundle = json.loads(raw)
+                        features  = fusion_pipeline.process_bundle(bundle)
+                        keypoints = estimator.predict(features)
+                        smoothed_keypoints = skeleton_filter.filter(keypoints)
 
-                    payload = json.dumps({
-                        "window_us":  bundle.get("window_us"),
-                        "keypoints":  smoothed_keypoints,
-                        "num_frames": len(bundle.get("frames", [])),
-                    })
+                        payload = json.dumps({
+                            "window_us":  bundle.get("window_us"),
+                            "keypoints":  smoothed_keypoints,
+                            "num_frames": len(bundle.get("frames", [])),
+                        })
 
-                    # Broadcast to all connected UI clients
-                    dead = []
-                    for client in _ui_clients:
-                        try:
-                            await client.send_text(payload)
-                        except Exception:
-                            dead.append(client)
-                    for d in dead:
-                        _ui_clients.remove(d)
+                        # Broadcast to all connected UI clients
+                        dead = []
+                        for client in _ui_clients:
+                            try:
+                                await client.send_text(payload)
+                            except Exception:
+                                dead.append(client)
+                        for d in dead:
+                            _ui_clients.remove(d)
+
+                    except json.JSONDecodeError:
+                        logger.warning("Malformed JSON received from aggregator. Skipping frame.")
+                    except Exception as e:
+                        logger.error(f"Inference error during processing: {e}")
 
         except Exception as e:
             logger.error(f"Aggregator connection error: {e}. Retrying in {backoff:.0f}s…")

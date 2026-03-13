@@ -13,6 +13,9 @@ Steps:
 import numpy as np
 from collections import deque
 from typing import List, Dict
+import os
+
+EXPECTED_NODES = int(os.getenv("EXPECTED_NODES", "3"))
 
 WINDOW_SIZE    = 40   # frames to keep in rolling window (~2 s at 20 Hz)
 BACKGROUND_N   = 30   # frames used to estimate static background
@@ -27,7 +30,7 @@ class CsiDenoiser:
     Produces denoised Doppler feature vectors from synced bundles.
     """
 
-    def __init__(self, num_nodes: int = 3, num_sub: int = 64, sample_hz: float = 20.0):
+    def __init__(self, num_nodes: int = EXPECTED_NODES, num_sub: int = 64, sample_hz: float = 20.0):
         self.num_nodes  = num_nodes
         self.num_sub    = num_sub
         self.sample_hz  = sample_hz

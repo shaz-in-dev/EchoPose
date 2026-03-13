@@ -25,15 +25,16 @@ def generate_dummy_weights():
     
     ckpt_path = models_dir / "pose_net.pt"
     
-    print(f"Generating production-ready (simulated) checkpoint at: {ckpt_path}")
+    print(f"⚠️ WARNING: Generating UNTRAINED MOCK checkpoint at: {ckpt_path}")
+    print("This project is currently an architecture showcase. No trained ML model is provided.")
     
     # Initialize the model and save its state_dict as if it were trained
     model = PoseNet()
     
     # Save the weights
     torch.save(model.state_dict(), ckpt_path)
-    print("✅ Weights downloaded and saved successfully.")
-    print("The inference engine will now load these weights instead of randomizing on startup.")
+    print("✅ Dummy weights downloaded and saved successfully.")
+    print("The inference engine will now load these random weights for architectural simulation.")
 
 if __name__ == "__main__":
     generate_dummy_weights()

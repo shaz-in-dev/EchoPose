@@ -31,8 +31,9 @@ try:
 except ImportError:
     has_ort = False
 
+EXPECTED_NODES  = int(os.getenv("EXPECTED_NODES", "3"))
 NUM_KEYPOINTS   = 17
-FEATURE_SHAPE   = (3, 64, 16)   # (nodes, subcarriers, doppler_bins)
+FEATURE_SHAPE   = (EXPECTED_NODES, 64, 16)   # (nodes, subcarriers, doppler_bins)
 MODEL_CKPT      = Path(__file__).parent.parent / "models" / "pose_net.pt"
 ONNX_CKPT       = Path(__file__).parent.parent / "models" / "pose_net.onnx"
 
