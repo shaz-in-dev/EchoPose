@@ -1,0 +1,16 @@
+[Unit]
+Description=RF-Mesh Inference Engine (Python)
+After=network.target aggregator.service
+
+[Service]
+Type=simple
+User=rfmesh
+WorkingDirectory=/opt/rf-mesh/inference
+EnvironmentFile=/opt/rf-mesh/.env
+Environment="PATH=/opt/rf-mesh/inference/venv/bin:$PATH"
+ExecStart=/opt/rf-mesh/inference/venv/bin/gunicorn server:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

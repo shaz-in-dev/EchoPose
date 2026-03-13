@@ -1,0 +1,15 @@
+# Default sdkconfig values — override in menuconfig or CI
+CONFIG_WIFI_SSID="rf-mesh-ap"
+CONFIG_WIFI_PASSWORD="rfmesh2025"
+CONFIG_NODE_ID=0
+CONFIG_HOST_IP="192.168.1.100"
+CONFIG_HOST_PORT=5005
+
+# Power & performance
+CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_WIFI_CSI_ENABLED=y
+
+# Disable power save for lowest latency
+CONFIG_PM_ENABLE=n
+CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE=n

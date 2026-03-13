@@ -1,0 +1,32 @@
+services:
+
+  aggregator:
+    image: rust:1.85
+    working_dir: /app
+    volumes:
+      - ./aggregator:/app
+      - ./.env:/app/.env
+    command: >
+      sh -c "cargo build --release && ./target/release/aggregator"
+    ports:
+      - "${AGGREGATOR_HTTP_PORT:-3000}:${AGGREGATOR_HTTP_PORT:-3000}"    # HTTP + WebSocket
+      - "${AGGREGATOR_UDP_PORT:-5005}:${AGGREGATOR_UDP_PORT:-5005}/udp"   # ESP32 CSI stream
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  inference:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./inference:/app
+      - ./.env:/app/.env
+    command: >
+      sh -c "pip install -r requirements.txt -q && gunicorn server:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}"
+    ports:
+      - "${INFERENCE_WS_PORT:-8765}:${INFERENCE_WS_PORT:-8765}"    # WebSocket to UI
+    env_file:
+      - .env
+    depends_on:
+      - aggregator
+    restart: unless-stopped

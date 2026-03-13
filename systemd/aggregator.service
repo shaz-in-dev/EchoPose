@@ -1,0 +1,16 @@
+[Unit]
+Description=RF-Mesh Aggregator Server (Rust)
+After=network.target
+
+[Service]
+Type=simple
+User=rfmesh
+WorkingDirectory=/opt/rf-mesh/aggregator
+EnvironmentFile=/opt/rf-mesh/.env
+ExecStart=/opt/rf-mesh/aggregator/target/release/aggregator
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

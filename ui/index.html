@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RF-Inference Mesh — Live Dashboard</title>
+  <meta name="description" content="Real-time Wi-Fi CSI pose estimation — see through walls with radio waves" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ── Header ───────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-pulse"></div>
+      <span class="header-title">RF-Inference Mesh</span>
+    <div class="header-right">
+      <div id="status-badge" class="badge badge--disconnected">Disconnected</div>
+      <div class="stat-pill"><span id="fps-display">0</span> <span class="stat-label">Hz</span></div>
+      <div class="stat-pill"><span id="node-count">0</span><span class="stat-label">/3 nodes</span></div>
+    </div>
+  </header>
+
+  <!-- ── Main Layout ──────────────────────────────────── -->
+  <main class="layout">
+
+    <!-- 3-D Skeleton Viewport -->
+    <section class="panel panel--primary" id="viewport-panel">
+      <div class="panel-header">
+        <span class="panel-title">3D Pose Skeleton</span>
+        <div class="controls-row">
+          <button id="btn-rotate"  class="ctrl-btn" title="Auto-rotate">Rotate</button>
+          <button id="btn-reset"   class="ctrl-btn" title="Reset camera">Reset</button>
+          <button id="btn-demo"    class="ctrl-btn demo-btn" title="Toggle demo mode">Demo</button>
+        </div>
+      </div>
+      <canvas id="skeleton-canvas"></canvas>
+      <div class="viewport-overlay">
+        <div class="axis-label x">X</div>
+        <div class="axis-label y">Y</div>
+        <div class="axis-label z">Z</div>
+      </div>
+    </section>
+
+    <!-- Right panels -->
+    <aside class="side-panels">
+
+      <!-- Recording Panel -->
+      <section class="panel panel--record">
+        <div class="panel-header">
+          <span class="panel-title">Session Recording</span>
+        </div>
+        <div style="padding: 12px;">
+          <p style="color: #888; font-size: 0.85em; margin-bottom: 12px;">
+            Save tracking data to a local file for later analysis.
+          </p>
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button id="btn-record" class="ctrl-btn" style="flex: 1;">Record</button>
+            <button id="btn-stop" class="ctrl-btn hidden" style="flex: 1; color: var(--danger);">Stop</button>
+          </div>
+          <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+            <label class="ctrl-btn" style="display: block; text-align: center; cursor: pointer;">
+              Load Playback
+              <input type="file" id="file-playback" accept=".json" style="display: none;">
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- CSI Heatmap -->
+      <section class="panel panel--heatmap">
+        <div class="panel-header">
+          <span class="panel-title">CSI Subcarrier Heatmap</span>
+          <select id="heatmap-node" class="ctrl-select">
+            <option value="0">Node 0</option>
+            <option value="1">Node 1</option>
+            <option value="2">Node 2</option>
+          </select>
+        </div>
+        <canvas id="heatmap-canvas" width="320" height="160"></canvas>
+      </section>
+
+      <!-- Keypoints table -->
+      <section class="panel panel--keypoints">
+        <div class="panel-header">
+          <span class="panel-title">Keypoints</span>
+        </div>
+        <div id="keypoints-list" class="kp-list"></div>
+      </section>
+
+      <!-- Signal metrics -->
+      <section class="panel panel--metrics">
+        <div class="panel-header">
+          <span class="panel-title">Signal Metrics</span>
+        </div>
+        <canvas id="metrics-canvas" width="320" height="120"></canvas>
+      </section>
+
+    </aside>
+  </main>
+
+  <!-- ── Connection modal ─────────────────────────────── -->
+  <div id="connect-modal" class="modal">
+    <div class="modal-box">
+      <h2>Connect to Inference Server</h2>
+      <label>WebSocket URI</label>
+      <input id="ws-uri" value="ws://localhost:8765/ws/pose" />
+      <div style="display: flex; gap: 8px;">
+        <button id="btn-connect" style="flex: 1;">Connect</button>
+        <button id="btn-close-modal" style="flex: 1; background: var(--surface2); color: var(--text);">Play Demo</button>
+      </div>
+      <p id="connect-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- ── Scripts ──────────────────────────────────────── -->
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="heatmap.js"></script>
+  <script src="skeleton.js"></script>
+  <script src="recorder.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
