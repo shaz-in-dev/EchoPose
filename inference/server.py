@@ -52,7 +52,7 @@ DEVICE         = os.getenv("INFERENCE_DEVICE", "auto")
 app = FastAPI(title="RF-Mesh Inference", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://localhost:8080", "http://127.0.0.1:8000", "http://127.0.0.1:8080"], # Restricted for production security
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080,http://127.0.0.1:8000,http://127.0.0.1:8080").split(","),
     allow_methods=["GET", "POST", "OPTIONS"], 
     allow_headers=["*"]
 )

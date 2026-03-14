@@ -11,11 +11,20 @@ import json
 import logging
 from faststream import FastStream
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+import os
 from pipeline.fusion import FusionPipeline
 from gpu_server import DistributedInference
 
 logger = logging.getLogger("rf_inference.async_server")
 app = FastAPI(title="EchoPose V2 High-Throughput Server")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080").split(","),
+    allow_methods=["GET", "POST", "OPTIONS"], 
+    allow_headers=["*"]
+)
 
 class HighThroughputServer:
     """Manages concurrent UI clients and non-blocking inference decoupling"""

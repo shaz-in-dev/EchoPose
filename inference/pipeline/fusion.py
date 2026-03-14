@@ -23,7 +23,7 @@ class FusionPipeline:
         )
         self.robustness = RobustCSIProcessor(expected_nodes=EXPECTED_NODES)
 
-    def process_bundle(self, bundle: Dict[str, Any]):
+    def process_bundle(self, bundle: Dict[str, Any]) -> np.ndarray:
         """
         Push each node's amplitudes into the advanced denoiser.
         Extract Doppler features and pass them through adversarial bounds.

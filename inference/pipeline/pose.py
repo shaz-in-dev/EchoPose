@@ -24,6 +24,7 @@ import torch.nn as nn
 from pathlib import Path
 from typing import List, Dict
 import os
+import hashlib
 
 try:
     import onnxruntime as ort
@@ -53,6 +54,13 @@ class PoseEstimator:
         
         # 1. Try ONNX First (Massive Speedup)
         if ONNX_CKPT.exists() and has_ort:
+            expected_hash = os.getenv("EXPECTED_ONNX_HASH")
+            if expected_hash:
+                with open(ONNX_CKPT, "rb") as f:
+                    file_hash = hashlib.sha256(f.read()).hexdigest()
+                if file_hash != expected_hash:
+                    raise ValueError(f"CRITICAL SECURITY: ONNX model SHA256 mismatch! Expected {expected_hash}, got {file_hash}")
+                    
             print(f"[pose] Found ONNX checkpoint at {ONNX_CKPT}. Using heavily optimized ONNX Runtime.")
             # Set providers based on environment
             providers = ['CPUExecutionProvider']

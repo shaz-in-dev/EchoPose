@@ -61,8 +61,13 @@ class AdvancedDenoiser:
         # Soft threshold the detail coefficients
         denoised_coeffs = [coeffs[0]] + [pywt.threshold(c, value=uthresh, mode='soft') for c in coeffs[1:]]
         
-        # Reconstruct
-        return pywt.waverec(denoised_coeffs, 'db4')[:len(sig)]
+        # Reconstruct and strictly enforce length boundaries to prevent silent truncation data-loss
+        reconstructed = pywt.waverec(denoised_coeffs, 'db4')
+        if len(reconstructed) > len(sig):
+            return reconstructed[:len(sig)]
+        elif len(reconstructed) < len(sig):
+            return np.pad(reconstructed, (0, len(sig) - len(reconstructed)), mode='edge')
+        return reconstructed
 
     def _spectral_subtraction(self, sig: np.ndarray) -> np.ndarray:
         """

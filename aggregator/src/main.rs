@@ -187,7 +187,14 @@ async fn main() -> anyhow::Result<()> {
                         info!("Room Calibration Complete: Static noise floor baselines calculated.");
                     }
                 }
-
+                
+                // Explicit baseline subtraction while holding the lock
+                if !cal.is_calibrating {
+                    if let Some(baseline) = cal.baselines.get(&frame.node_id) {
+                        for i in 0..frame.iq_data.len().min(baseline.len()) {
+                            frame.iq_data[i] = frame.iq_data[i].saturating_sub(baseline[i]);
+                        }
+                    }
                 }
             }
 
@@ -249,6 +256,11 @@ async fn nodes_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse 
 
 // POST /calibrate — Start the 5-second static room calibration
 async fn calibrate_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let mut cal = state.calibration.write().await;
+    cal.is_calibrating = true;
+    cal.end_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 + 5000;
+    cal.accumulators.clear();
+    info!("Calibration Initiated for 5000ms over WS/UDP");
     Json(serde_json::json!({"status": "calibrating", "duration_ms": 5000}))
 }
 
