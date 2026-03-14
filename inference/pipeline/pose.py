@@ -38,39 +38,10 @@ FEATURE_SHAPE   = (EXPECTED_NODES, 64, 16)   # (nodes, subcarriers, doppler_bins
 MODEL_CKPT      = Path(__file__).parent.parent / "models" / "pose_net.pt"
 ONNX_CKPT       = Path(__file__).parent.parent / "models" / "pose_net.onnx"
 
-class PoseNet(nn.Module):
-    # ... (Keep PoseNet definition unchanged) ...
-    def __init__(self):
-        super().__init__()
-        in_ch = FEATURE_SHAPE[0]   # num nodes = 3
-        self.encoder = nn.Sequential(
-            # Treat subcarriers as 1D sequence, doppler bins as channels
-            nn.Conv1d(FEATURE_SHAPE[2], 32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv1d(32, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool1d(16),
-        )
-        flat = 64 * 16 * in_ch
-        self.head = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(flat, 512),
-            nn.ReLU(),
-            nn.Linear(512, MAX_PEOPLE * NUM_KEYPOINTS * 4),  # x, y, z, conf
-            nn.Sigmoid(),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: [B, nodes, subcarriers, doppler_bins]
-        B, N, S, D = x.shape
-        outs = []
-        for i in range(N):
-            node_feat = x[:, i]                       # [B, S, D]
-            node_feat = node_feat.permute(0, 2, 1)    # [B, D, S]
-            enc = self.encoder(node_feat)             # [B, 64, 16]
-            outs.append(enc)
-        fused = torch.cat(outs, dim=1)                # [B, 64*N, 16]
-        return self.head(fused).view(B, MAX_PEOPLE, NUM_KEYPOINTS, 4)
+from pipeline.pose_net_v2 import PoseNetV2
+# Ensure we map the V2 architecture to the Estimator
+class PoseNet(PoseNetV2):
+    pass
 
 class PoseEstimator:
     """Wraps PoseNet with checkpoint loading and inference."""

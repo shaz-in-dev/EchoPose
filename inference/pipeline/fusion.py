@@ -7,23 +7,39 @@ matrix ready for the denoiser.
 """
 
 from typing import Any, Dict
-from pipeline.denoise import CsiDenoiser
+from pipeline.advanced_denoise import AdvancedDenoiser
+from pipeline.robust_processing import RobustCSIProcessor
 import os
 
 EXPECTED_NODES = int(os.getenv("EXPECTED_NODES", "3"))
 
 class FusionPipeline:
     def __init__(self):
-        self.denoiser = CsiDenoiser(num_nodes=EXPECTED_NODES, num_sub=64, sample_hz=20.0)
+        self.denoiser = AdvancedDenoiser(
+            num_nodes=EXPECTED_NODES, 
+            num_sub=64, 
+            sample_hz=20.0,
+            stages=['wiener', 'wavelet', 'spectral']
+        )
+        self.robustness = RobustCSIProcessor(expected_nodes=EXPECTED_NODES)
 
     def process_bundle(self, bundle: Dict[str, Any]):
         """
-        Push each node's amplitudes into the denoiser, then compute
-        and return the Doppler feature tensor.
+        Push each node's amplitudes into the advanced denoiser.
+        Extract Doppler features and pass them through adversarial bounds.
         """
+        active_nodes = []
         for frame in bundle.get("frames", []):
             node_id    = int(frame["node_id"])
             amplitudes = frame["amplitudes"]
             self.denoiser.push(node_id, amplitudes)
+            if node_id not in active_nodes:
+                active_nodes.append(node_id)
 
-        return self.denoiser.compute_features()
+        # 1. World-class multi-stage denoising
+        features, confidence = self.denoiser.compute_features()
+        
+        # 2. Adversarial hardening (NLOS, Interference, Failures)
+        hardened_features, metrics = self.robustness.process_bundle(features, active_nodes)
+        
+        return hardened_features

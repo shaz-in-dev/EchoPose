@@ -1,0 +1,77 @@
+# k8s/echo-pose-deployment.yaml — Enterprise Kubernetes Support (Feature 14)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-pose-aggregator
+  labels:
+    app: echo-pose
+    tier: edge
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: echo-pose
+  template:
+    metadata:
+      labels:
+        app: echo-pose
+    spec:
+      containers:
+      - name: aggregator
+        image: echo-pose:aggregator-latest
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: echo-pose-inference
+  labels:
+    app: echo-pose
+    tier: ml
+spec:
+  serviceName: echo-pose-inference
+  replicas: 4
+  selector:
+    matchLabels:
+      app: echo-pose
+      tier: ml
+  template:
+    metadata:
+      labels:
+        app: echo-pose
+        tier: ml
+    spec:
+      containers:
+      - name: inference
+        image: echo-pose:inference-latest
+        ports:
+        - containerPort: 8765
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: "1"  # Automatically requests 1 physical GPU per pod
+        env:
+        - name: EXPECTED_NODES
+          value: "3"
+        - name: INFERENCE_DEVICE
+          value: "cuda"

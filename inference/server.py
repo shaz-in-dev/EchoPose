@@ -22,7 +22,9 @@ Environment variables:
 import asyncio
 import json
 import os
+import time
 from pathlib import Path
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 import numpy as np
 import uvicorn
@@ -33,7 +35,10 @@ from dotenv import load_dotenv
 
 from pipeline.fusion import FusionPipeline
 from pipeline.pose   import PoseEstimator
-from pipeline.filter import SkeletonFilter
+from pipeline.temporal_filter_v2 import TemporalPoseFilterV2
+
+from monitoring.metrics import SystemMetrics
+from logging.structured_logger import StructuredLogger
 
 
 # Load central config
@@ -53,7 +58,7 @@ app.add_middleware(
 )
 
 estimator = PoseEstimator()
-skeleton_filter = SkeletonFilter(alpha=0.4)
+skeleton_filter = TemporalPoseFilterV2(max_people=3)
 class ConnectionManager:
     """Thread-safe WebSocket connection manager."""
     def __init__(self):
@@ -105,41 +110,61 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+# ── Feature 6 & 7: Enterprise Observability ────────────────────────
+sys_metrics = SystemMetrics(port=9090)
+struct_logger = StructuredLogger(log_dir="logs")
+
 # ── Background task: pull from aggregator, infer, broadcast ──────
+
+@retry(
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_attempt(5)
+)
+async def connect_and_process(fusion_pipeline):
+    async with websockets.connect(AGGREGATOR_WS, ping_interval=20, ping_timeout=20, open_timeout=10) as ws:
+        logger.info(f"Connected to aggregator @ {AGGREGATOR_WS}")
+        async for raw in ws:
+            try:
+                start_time = time.time()
+                bundle = json.loads(raw)
+                features  = fusion_pipeline.process_bundle(bundle)
+                skeletons = estimator.predict(features)
+                smoothed_skeletons = skeleton_filter.filter(skeletons)
+                
+                # Extract pipeline metrics for logging
+                mean_conf = np.mean([kp["confidence"] for s in smoothed_skeletons for kp in s]) if smoothed_skeletons and smoothed_skeletons[0] else 0.0
+                node_health = fusion_pipeline.robustness.node_health
+                
+                payload = json.dumps({
+                    "window_us": bundle.get("window_us"),
+                    "skeletons": smoothed_skeletons,
+                    "num_frames": len(bundle.get("frames", [])),
+                })
+
+                await manager.broadcast(payload)
+                
+                # Observability updates
+                latency_ms = (time.time() - start_time) * 1000
+                sys_metrics.record_inference(latency_ms, mean_conf)
+                sys_metrics.record_node_health(node_health)
+                struct_logger.log_inference(latency_ms, mean_conf, [], node_health)
+
+            except json.JSONDecodeError:
+                logger.warning("Malformed JSON received from aggregator. Skipping frame.")
+                sys_metrics.record_drop()
+            except Exception as e:
+                logger.error(f"Inference error during processing: {e}")
+                struct_logger.log_error("Inference Error", str(e))
+
 async def aggregator_loop():
-    """Connects to the Rust aggregator WS and runs inference on each bundle."""
-    fusion_pipeline = FusionPipeline()  # Thread-safe pipeline per worker
-    backoff = 1.0
+    """Wrapper to maintain infinite resilience beyond individual retries."""
+    fusion_pipeline = FusionPipeline()
     while True:
         try:
-            async with websockets.connect(AGGREGATOR_WS, ping_interval=20, ping_timeout=20, open_timeout=10) as ws:
-                logger.info(f"Connected to aggregator @ {AGGREGATOR_WS}")
-                backoff = 1.0
-                async for raw in ws:
-                    try:
-                        bundle = json.loads(raw)
-                        features  = fusion_pipeline.process_bundle(bundle)
-                        skeletons = estimator.predict(features)
-                        smoothed_skeletons = skeleton_filter.filter(skeletons)
-
-                        payload = json.dumps({
-                            "window_us": bundle.get("window_us"),
-                            "skeletons": smoothed_skeletons, # Array of skeletons
-                            "num_frames": len(bundle.get("frames", [])),
-                        })
-
-                        # Broadcast to all connected UI clients
-                        await manager.broadcast(payload)
-
-                    except json.JSONDecodeError:
-                        logger.warning("Malformed JSON received from aggregator. Skipping frame.")
-                    except Exception as e:
-                        logger.error(f"Inference error during processing: {e}")
-
+            await connect_and_process(fusion_pipeline)
         except Exception as e:
-            logger.error(f"Aggregator connection error: {e}. Retrying in {backoff:.0f}s…")
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 30)
+            logger.error(f"Aggregator WS exhausted all retries! Connection failed: {e}. Rebounding in 10s...")
+            await asyncio.sleep(10)
 
 
 @app.on_event("startup")
