@@ -33,6 +33,7 @@ except ImportError:
 
 EXPECTED_NODES  = int(os.getenv("EXPECTED_NODES", "3"))
 NUM_KEYPOINTS   = 17
+MAX_PEOPLE      = 3  # Multi-person support
 FEATURE_SHAPE   = (EXPECTED_NODES, 64, 16)   # (nodes, subcarriers, doppler_bins)
 MODEL_CKPT      = Path(__file__).parent.parent / "models" / "pose_net.pt"
 ONNX_CKPT       = Path(__file__).parent.parent / "models" / "pose_net.onnx"
@@ -53,9 +54,9 @@ class PoseNet(nn.Module):
         flat = 64 * 16 * in_ch
         self.head = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(flat, 256),
+            nn.Linear(flat, 512),
             nn.ReLU(),
-            nn.Linear(256, NUM_KEYPOINTS * 4),  # x, y, z, conf
+            nn.Linear(512, MAX_PEOPLE * NUM_KEYPOINTS * 4),  # x, y, z, conf
             nn.Sigmoid(),
         )
 
@@ -69,7 +70,7 @@ class PoseNet(nn.Module):
             enc = self.encoder(node_feat)             # [B, 64, 16]
             outs.append(enc)
         fused = torch.cat(outs, dim=1)                # [B, 64*N, 16]
-        return self.head(fused).view(B, NUM_KEYPOINTS, 4)
+        return self.head(fused).view(B, MAX_PEOPLE, NUM_KEYPOINTS, 4)
 
 class PoseEstimator:
     """Wraps PoseNet with checkpoint loading and inference."""
@@ -118,33 +119,36 @@ class PoseEstimator:
             print(f"[pose] No checkpoint found at {MODEL_CKPT}. Using random PyTorch weights (simulation mode).")
 
     @torch.no_grad()
-    def predict(self, features: np.ndarray) -> List[Dict]:
+    def predict(self, features: np.ndarray) -> List[List[Dict]]:
         """
         Args:
             features: ndarray [nodes, subcarriers, doppler_bins]
         Returns:
-            list of 17 keypoints: [{x, y, z, confidence}, ...]
-            Coordinates are normalized [0, 1]. Scale to room dimensions on the frontend.
+            list of people, each containing 17 keypoints: [[{x, y, z, conf}, ...], ...]
         """
         # Batch dimension setup
         x_np = np.expand_dims(features.astype(np.float32), axis=0) # [1, N, S, D]
 
         if self.use_onnx:
-            # Execute ONNX session
             input_name = self.onnx_sess.get_inputs()[0].name
             raw = self.onnx_sess.run(None, {input_name: x_np})[0]
-            raw = raw.squeeze(0)  # [17, 4]
+            raw = raw.squeeze(0)  # [MAX_PEOPLE, 17, 4]
         else:
-            # Execute PyTorch model
             x = torch.tensor(x_np).to(self.device)
-            raw = self.model(x).squeeze(0).cpu().numpy()  # [17, 4]
+            raw = self.model(x).squeeze(0).cpu().numpy()  # [MAX_PEOPLE, 17, 4]
 
-        keypoints = []
-        for kp in raw:
-            keypoints.append({
-                "x":          float(kp[0]),
-                "y":          float(kp[1]),
-                "z":          float(kp[2]),
-                "confidence": float(kp[3]),
-            })
-        return keypoints
+        results = []
+        for person_idx in range(MAX_PEOPLE):
+            person_raw = raw[person_idx]
+            keypoints = []
+            # For simulation: only return "active" people if confidence avg is decent
+            # In a real model, this would be handled by the thresholding.
+            for kp in person_raw:
+                keypoints.append({
+                    "x":          float(kp[0]),
+                    "y":          float(kp[1]),
+                    "z":          float(kp[2]),
+                    "confidence": float(kp[3]),
+                })
+            results.append(keypoints)
+        return results

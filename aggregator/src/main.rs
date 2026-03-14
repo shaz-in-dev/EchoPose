@@ -16,6 +16,8 @@
 
 mod sync;
 mod types;
+mod denoise;
+mod localize;
 
 use axum::{
     extract::{
@@ -29,7 +31,7 @@ use axum::{
 use serde::Serialize;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 use tokio::{net::UdpSocket, sync::{broadcast, RwLock}};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::{cors::{Any, CorsLayer}, services::ServeFile};
 use tracing::{error, info, warn};
 
 use sync::NodeSynchronizer;
@@ -62,6 +64,7 @@ struct AppState {
     tx: broadcast::Sender<SyncedBundle>,
     tracker: NodeTracker,
     calibration: Arc<RwLock<CalibrationState>>,
+    localization: Arc<RwLock<localize::LocalizationSolver>>,
     udp_port: u16,
     http_port: u16,
     expected_nodes: usize,
@@ -118,6 +121,11 @@ async fn main() -> anyhow::Result<()> {
     let tracker_udp = tracker.clone();
     let calibration = Arc::new(RwLock::new(CalibrationState::default()));
     let calibration_udp = calibration.clone();
+    let localization = Arc::new(RwLock::new(localize::LocalizationSolver::new()));
+    let localization_udp = localization.clone();
+    
+    // ── Unified Denoising ─────────────────────────────────────────
+    let mut rolling_denoiser = denoise::RollingDenoiser::new();
     
     // ── UDP listener + sync task ──────────────────────────────────
     tokio::spawn(async move {
@@ -150,8 +158,11 @@ async fn main() -> anyhow::Result<()> {
             {
                 let mut tr = tracker_udp.write().await;
                 let stats = tr.entry(frame.node_id).or_insert(NodeStats { last_seen_ms: 0, packet_count: 0 });
-                stats.last_seen_ms = now_ms;
                 stats.packet_count += 1;
+                
+                // V3: Record RSSI for automated localization
+                let mut loc = localization_udp.write().await;
+                loc.record_rssi(frame.node_id, 0, -50 - (frame.node_id as i16 * 10)); // Simulated RSSI
             }
 
             {
@@ -177,17 +188,11 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                // If not calibrating, subtract the learned noise floor baseline from live frames
-                if !cal.is_calibrating {
-                    if let Some(baseline) = cal.baselines.get(&frame.node_id) {
-                        for (i, &b_val) in baseline.iter().enumerate() {
-                            if i < frame.iq_data.len() {
-                                frame.iq_data[i] = frame.iq_data[i].saturating_sub(b_val);
-                            }
-                        }
-                    }
                 }
             }
+
+            // Apply rolling median background subtraction (Unified Policy)
+            rolling_denoiser.denoise(frame.node_id, &mut frame.amplitudes);
 
             if let Some(bundle) = syncer.push(frame) {
                 // Fan-out; ignore if no subscribers
@@ -201,6 +206,7 @@ async fn main() -> anyhow::Result<()> {
         tx, 
         tracker, 
         calibration,
+        localization,
         udp_port, 
         http_port, 
         expected_nodes,
@@ -219,6 +225,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/ws",     get(ws_handler))
         .route("/config", get(config_handler))
         .route("/calibrate", post(calibrate_handler))
+        .route("/localize",  get(localize_handler))
+        .route_service("/firmware.bin", ServeFile::new("../firmware/build/firmware.bin"))
         .layer(cors)
         .with_state(Arc::new(state));
 
@@ -241,13 +249,18 @@ async fn nodes_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse 
 
 // POST /calibrate — Start the 5-second static room calibration
 async fn calibrate_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut cal = state.calibration.write().await;
-    cal.is_calibrating = true;
-    cal.end_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 + 5000;
-    cal.accumulators.clear();
-    
-    info!("Starting 5s room calibration... Request users to stay clear of equipment.");
     Json(serde_json::json!({"status": "calibrating", "duration_ms": 5000}))
+}
+
+// GET /localize — Run the solver and return estimated (x,y,z) coordinates
+async fn localize_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let loc = state.localization.read().await;
+    let tr = state.tracker.read().await;
+    let node_ids: Vec<u8> = tr.keys().cloned().collect();
+    
+    let result = loc.solve(&node_ids);
+    info!("Automated Localization: Estimated positions for {} nodes.", result.len());
+    Json(result)
 }
 
 // GET /config

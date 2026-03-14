@@ -21,6 +21,7 @@ const nodeCount   = document.getElementById('node-count');
 const kpList      = document.getElementById('keypoints-list');
 const btnRotate   = document.getElementById('btn-rotate');
 const btnReset    = document.getElementById('btn-reset');
+const btnLocalize = document.getElementById('btn-localize');
 const btnDemo     = document.getElementById('btn-demo');
 
 // ── Renderers ─────────────────────────────────────────────────────
@@ -55,9 +56,17 @@ function tick() {
 function handleFrame(data) {
   if (typeof recordFrame === 'function') recordFrame(data);
   tick();
-  const { keypoints, num_frames } = data;
-  skeleton.updateKeypoints(keypoints);
-  updateKpTable(keypoints);
+  
+  // V3 format (Array of skeletons)
+  if (data.skeletons) {
+    skeleton.updateSkeletons(data.skeletons);
+    if (data.skeletons[0]) updateKpTable(data.skeletons[0]);
+  } 
+  // V2 format (Backward compatibility for old recordings)
+  else if (data.keypoints) {
+    skeleton.updateSkeletons([data.keypoints]);
+    updateKpTable(data.keypoints);
+  }
 }
 
 // ── Node Health Polling ───────────────────────────────────────────
@@ -83,6 +92,23 @@ async function pollNodes() {
     // Ignore fetch errors
   }
 }
+
+// ── Automated Localization ────────────────────────────────────────
+async function fetchLocalization() {
+  try {
+    const wsUrl = new URL(wsUriInput.value.trim());
+    const httpUrl = `http://${wsUrl.hostname}:3000/localize`;
+    const res = await fetch(httpUrl);
+    if (!res.ok) return;
+    const nodeCoords = await res.json();
+    skeleton.updateNodes(nodeCoords);
+    console.log("[V3] Node localization updated:", nodeCoords);
+  } catch (e) {
+    console.warn("Localization failed:", e);
+  }
+}
+
+btnLocalize.addEventListener('click', () => fetchLocalization());
 
 // Poll every 1 second
 setInterval(pollNodes, 1000);
@@ -197,7 +223,8 @@ function syntheticPose(t) {
 let demoT = 0;
 function demoTick() {
   const kps = syntheticPose(demoT++);
-  skeleton.updateKeypoints(kps);
+  // V3 update asks for an array of skeletons
+  skeleton.updateSkeletons([kps]);
   updateKpTable(kps);
   tick();
   // Fake heatmap data for demo

@@ -69,9 +69,8 @@ class CsiDenoiser:
 
                 arr = np.array(data, dtype=np.float32)
 
-                # 1. Background subtraction: remove median (static "wall")
-                background  = np.median(arr[:BACKGROUND_N])
-                motion_sig  = arr - background
+                # 1. Use the pre-denoised signal from Rust (already motion-extracted)
+                motion_sig = arr
 
                 # 2. Hanning window to reduce spectral leakage
                 window  = np.hanning(len(motion_sig))

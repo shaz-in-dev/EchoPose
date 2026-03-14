@@ -119,12 +119,12 @@ async def aggregator_loop():
                     try:
                         bundle = json.loads(raw)
                         features  = fusion_pipeline.process_bundle(bundle)
-                        keypoints = estimator.predict(features)
-                        smoothed_keypoints = skeleton_filter.filter(keypoints)
+                        skeletons = estimator.predict(features)
+                        smoothed_skeletons = skeleton_filter.filter(skeletons)
 
                         payload = json.dumps({
-                            "window_us":  bundle.get("window_us"),
-                            "keypoints":  smoothed_keypoints,
+                            "window_us": bundle.get("window_us"),
+                            "skeletons": smoothed_skeletons, # Array of skeletons
                             "num_frames": len(bundle.get("frames", [])),
                         })
 
