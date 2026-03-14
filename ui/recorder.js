@@ -40,6 +40,13 @@ function recordFrame(data) {
   // Deep copy the data and add elapsed time
   const frameCopy = JSON.parse(JSON.stringify(data));
   frameCopy.rel_time = performance.now() - recordStartTime;
+  
+  // Privacy Anonymization Flag (Assuming a generic checkbox could exist)
+  const isAnonymized = document.getElementById('chk-anonymize')?.checked;
+  if (isAnonymized) {
+      delete frameCopy.skeletons; // Strip explicit 3D poses, keeping only metadata and heatmaps
+  }
+  
   recordedFrames.push(frameCopy);
 }
 

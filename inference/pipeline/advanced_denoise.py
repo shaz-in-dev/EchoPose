@@ -15,6 +15,10 @@ import pywt
 from collections import deque
 from typing import List, Dict
 
+# Named Constants to replace Magic Numbers
+WINDOW_SIZE = 40
+FFT_BINS = 16
+
 class AdvancedDenoiser:
     """
     World-class CSI Signal Processing Pipeline.
@@ -24,8 +28,8 @@ class AdvancedDenoiser:
         self.num_nodes = num_nodes
         self.num_sub = num_sub
         self.sample_hz = sample_hz
-        self.window_size = 40
-        self.fft_bins = 16
+        self.window_size = WINDOW_SIZE
+        self.fft_bins = FFT_BINS
         
         self.stages = stages if stages else ['wiener', 'wavelet', 'spectral']
         

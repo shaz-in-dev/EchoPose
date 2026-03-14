@@ -149,9 +149,10 @@ async def connect_and_process(fusion_pipeline):
                 sys_metrics.record_node_health(node_health)
                 struct_logger.log_inference(latency_ms, mean_conf, [], node_health)
 
-            except json.JSONDecodeError:
-                logger.warning("Malformed JSON received from aggregator. Skipping frame.")
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON from aggregator: {e}")
                 sys_metrics.record_drop()
+                continue
             except Exception as e:
                 logger.error(f"Inference error during processing: {e}")
                 struct_logger.log_error("Inference Error", str(e))

@@ -75,11 +75,16 @@ class HighThroughputServer:
             self.bundle_queue.task_done()
 
     async def _receive_ui_commands(self, ws: WebSocket):
+        import httpx
         while True:
             cmd = await ws.receive_text()
             if cmd == "calibrate":
                 logger.info("Triggering System Recalibration")
-                # ... forward logic ...
+                try:
+                    async with httpx.AsyncClient() as client:
+                        await client.post("http://localhost:3000/calibrate")
+                except Exception as e:
+                    logger.error(f"Failed to relay calibrate command: {e}")
 
     async def _health_ping(self, ws: WebSocket):
         while True:

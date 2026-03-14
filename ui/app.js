@@ -89,7 +89,9 @@ async function pollNodes() {
     }
     nodeCount.textContent = active;
   } catch (e) {
-    // Ignore fetch errors
+    console.warn(`Node polling failed: ${e.message}`);
+    statusBadge.textContent = 'Polling Error';
+    statusBadge.className = 'badge badge--disconnected';
   }
 }
 
