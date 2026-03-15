@@ -1,0 +1,37 @@
+{"timestamp":"2026-03-15T20:09:03.996004Z","level":"INFO","fields":{"message":"HTTP/WS server on 0.0.0.0:3000"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:09:03.998320Z","level":"INFO","fields":{"message":"UDP listener on :5005"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:09:33.825883Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:10:26.915958Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:10:43.434878Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:11:20.979566Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:12:17.065361Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:13:00.654331Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:13:05.136174Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:13:06.551741Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:13:06.551946Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:13:53.747932Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:14:45.506746Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:14:47.858281Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:15:03.205553Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:15:43.961905Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:16:10.908631Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:16:15.124613Z","level":"INFO","fields":{"message":"Automated Localization: Estimated positions for 3 nodes."},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:16:15.940553Z","level":"INFO","fields":{"message":"Automated Localization: Estimated positions for 3 nodes."},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:16:41.831894Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:16:44.059265Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:17:46.151933Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:17:47.161726Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:18:37.954640Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:18:39.240474Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:19:33.319739Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:19:36.933081Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:21:19.737381Z","level":"INFO","fields":{"message":"HTTP/WS server on 0.0.0.0:3000"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:21:19.739677Z","level":"INFO","fields":{"message":"UDP listener on :5005"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:21:20.737472Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:21:46.685240Z","level":"INFO","fields":{"message":"Automated Localization: Estimated positions for 1 nodes."},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:21:48.008691Z","level":"INFO","fields":{"message":"Automated Localization: Estimated positions for 1 nodes."},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:22:13.831760Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:22:30.822601Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:23:07.917525Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:23:08.079661Z","level":"INFO","fields":{"message":"WebSocket client disconnected"},"target":"aggregator"}
+{"timestamp":"2026-03-15T20:24:04.000419Z","level":"INFO","fields":{"message":"WebSocket client connected"},"target":"aggregator"}

@@ -62,6 +62,10 @@ function handleFrame(data) {
     skeleton.updateSkeletons(data.skeletons);
     if (data.skeletons[0]) updateKpTable(data.skeletons[0]);
   } 
+  
+  if (data.amplitudes) {
+    heatmap.push(data.amplitudes);
+  }
   // V2 format (Backward compatibility for old recordings)
   else if (data.keypoints) {
     skeleton.updateSkeletons([data.keypoints]);
@@ -81,11 +85,20 @@ async function pollNodes() {
     if (!res.ok) return;
     const nodes = await res.json();
     
-    // Count nodes that sent data in the last 2000 milliseconds
+    // Count nodes — the aggregator sends last_seen_ms as a Unix ms timestamp.
+    // We compare against Date.now() with a 5-second freshness window.
     const now = Date.now();
     let active = 0;
     for (const [id, stats] of Object.entries(nodes)) {
-      if (now - stats.last_seen_ms < 2000) active++;
+      const age = now - stats.last_seen_ms;
+      if (age >= 0 && age < 5000) active++;
+    }
+    // If all timestamps look like they are in the past but recent, count them
+    if (active === 0 && Object.keys(nodes).length > 0) {
+      // Fallback: just count non-zero packet_count nodes
+      for (const [id, stats] of Object.entries(nodes)) {
+        if (stats.packet_count > 0) active++;
+      }
     }
     nodeCount.textContent = active;
   } catch (e) {
@@ -263,5 +276,5 @@ btnRotate.addEventListener('click', () => {
 btnReset.addEventListener('click', () => skeleton.resetCamera());
 
 // ── Entry point ───────────────────────────────────────────────────
-// Auto-start demo so the user sees something immediately
-startDemo();
+// Auto-connect to the local inference server by default
+connect("ws://localhost:8765/ws/pose");

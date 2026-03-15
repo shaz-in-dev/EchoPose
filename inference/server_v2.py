@@ -108,3 +108,7 @@ async def ingest_bundle(bundle: dict):
     if not server.bundle_queue.full():
         await server.bundle_queue.put(bundle)
     return {"status": "queued"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8765)

@@ -38,7 +38,7 @@ from pipeline.pose   import PoseEstimator
 from pipeline.temporal_filter_v2 import TemporalPoseFilterV2
 
 from monitoring.metrics import SystemMetrics
-from logging.structured_logger import StructuredLogger
+from custom_logger import StructuredLogger
 
 
 # Load central config
@@ -135,9 +135,15 @@ async def connect_and_process(fusion_pipeline):
                 mean_conf = np.mean([kp["confidence"] for s in smoothed_skeletons for kp in s]) if smoothed_skeletons and smoothed_skeletons[0] else 0.0
                 node_health = fusion_pipeline.robustness.node_health
                 
+                # Extract amplitudes for the UI Heatmap
+                amps_dict = {}
+                for f in bundle.get("frames", []):
+                    amps_dict[f["node_id"]] = {"amplitudes": f.get("amplitudes", [])}
+                
                 payload = json.dumps({
                     "window_us": bundle.get("window_us"),
                     "skeletons": smoothed_skeletons,
+                    "amplitudes": amps_dict,
                     "num_frames": len(bundle.get("frames", [])),
                 })
 
@@ -193,4 +199,4 @@ async def health():
 
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=INFERENCE_PORT, reload=False, log_config=None)
+    uvicorn.run(app, host="0.0.0.0", port=INFERENCE_PORT, reload=False, log_config=None)

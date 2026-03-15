@@ -12,6 +12,8 @@ void start_ota_update(const char* url) {
     esp_http_client_config_t config = {
         .url = url,
         .cert_pem = NULL, // Skipping cert validation for this local HTTP workflow
+        .skip_cert_common_name_check = true,
+        .crt_bundle_attach = NULL,
         .timeout_ms = 10000,
         .keep_alive_enable = true,
     };

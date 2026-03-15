@@ -96,6 +96,8 @@ class PoseEstimator:
             print(f"[pose] Loaded PyTorch checkpoint from {MODEL_CKPT}")
         else:
             print(f"[pose] No checkpoint found at {MODEL_CKPT}. Using random PyTorch weights (simulation mode).")
+        self.is_simulation = not MODEL_CKPT.exists() and not self.use_onnx
+        self.sim_tick = 0
 
     @torch.no_grad()
     def predict(self, features: np.ndarray) -> List[List[Dict]]:
@@ -105,6 +107,36 @@ class PoseEstimator:
         Returns:
             list of people, each containing 17 keypoints: [[{x, y, z, conf}, ...], ...]
         """
+        if self.is_simulation:
+            import math
+            self.sim_tick += 1
+            t = self.sim_tick
+            s = math.sin
+            walk = t * 0.04
+            # Synthetic pose to prove pipeline works 
+            base_pose = [
+                {'x': 0.5, 'y': 0.15, 'z': 0.5},
+                {'x': 0.48, 'y': 0.13, 'z': 0.5},
+                {'x': 0.52, 'y': 0.13, 'z': 0.5},
+                {'x': 0.45, 'y': 0.14, 'z': 0.5},
+                {'x': 0.55, 'y': 0.14, 'z': 0.5},
+                {'x': 0.4, 'y': 0.28, 'z': 0.5},
+                {'x': 0.6, 'y': 0.28, 'z': 0.5},
+                {'x': 0.35 + s(walk)*0.04, 'y': 0.42, 'z': 0.5 + s(walk)*0.05},
+                {'x': 0.65 - s(walk)*0.04, 'y': 0.42, 'z': 0.5 - s(walk)*0.05},
+                {'x': 0.3 + s(walk)*0.07, 'y': 0.56, 'z': 0.5 + s(walk)*0.08},
+                {'x': 0.7 - s(walk)*0.07, 'y': 0.56, 'z': 0.5 - s(walk)*0.08},
+                {'x': 0.44, 'y': 0.58, 'z': 0.5},
+                {'x': 0.56, 'y': 0.58, 'z': 0.5},
+                {'x': 0.42 + s(walk+1)*0.07, 'y': 0.73, 'z': 0.5 + s(walk+1)*0.07},
+                {'x': 0.58 - s(walk+1)*0.07, 'y': 0.73, 'z': 0.5 - s(walk+1)*0.07},
+                {'x': 0.42 + s(walk+2)*0.10, 'y': 0.88, 'z': 0.5 + s(walk+2)*0.10},
+                {'x': 0.58 - s(walk+2)*0.10, 'y': 0.88, 'z': 0.5 - s(walk+2)*0.10},
+            ]
+            for p in base_pose:
+                p['confidence'] = 0.9
+            return [base_pose]  # [one_person_kps] — list of 17 kp dicts
+
         # Batch dimension setup
         x_np = np.expand_dims(features.astype(np.float32), axis=0) # [1, N, S, D]
 

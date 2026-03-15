@@ -24,7 +24,6 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "esp_log.h"
-#include "esp_csi.h"
 #include "esp_timer.h"
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"

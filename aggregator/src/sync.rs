@@ -3,14 +3,14 @@
 //
 // Strategy: sliding 50ms time windows. Once all known nodes
 // have contributed at least one frame to a window, emit a
-// SyncedBundle to the output channel. Stale windows (>200ms
+// SyncedBundle to the output channel. Stale windows (>150ms
 // old with incomplete data) are flushed with whatever arrived.
 // ============================================================
 use std::collections::{HashMap, HashSet};
 use crate::types::{CsiFrame, SyncedBundle};
 
 pub const WINDOW_US:      u64 = 50_000;   // 50 ms windows  → 20 Hz
-pub const STALE_LIMIT_US: u64 = 200_000;  // flush after 200 ms regardless
+pub const STALE_LIMIT_US: u64 = 50_000;   // flush after one window period — drives steady 20 Hz output
 
 struct Window {
     start_us: u64,
@@ -21,6 +21,7 @@ pub struct NodeSynchronizer {
     expected_node_count: usize,
     discovered_nodes:    HashSet<u8>,
     windows:             HashMap<u64, Window>, // slot_key → Window
+    newest_ts_us:        u64,                  // highest timestamp seen = our clock
 }
 
 impl NodeSynchronizer {
@@ -29,13 +30,19 @@ impl NodeSynchronizer {
             expected_node_count: expected_count,
             discovered_nodes:    HashSet::new(),
             windows:             HashMap::new(),
+            newest_ts_us:        0,
         }
     }
 
     /// Feed a decoded frame; returns a SyncedBundle if the window is complete.
     pub fn push(&mut self, frame: CsiFrame) -> Option<SyncedBundle> {
         let slot = (frame.timestamp_us / WINDOW_US) * WINDOW_US;
-        
+
+        // Keep a running "clock" from the newest timestamp we've ever seen
+        if frame.timestamp_us > self.newest_ts_us {
+            self.newest_ts_us = frame.timestamp_us;
+        }
+
         // Dynamically track new nodes
         self.discovered_nodes.insert(frame.node_id);
 
@@ -47,8 +54,7 @@ impl NodeSynchronizer {
         // Keep newest frame per node per window
         window.frames.insert(frame.node_id, frame);
 
-        // Complete if we hit the expected count, OR if we have frames from all nodes discovered so far 
-        // (this helps the system start up smoothly before all nodes are alive)
+        // Complete if we hit the expected count, OR if we have frames from all nodes discovered so far
         let target_nodes = std::cmp::min(self.expected_node_count, self.discovered_nodes.len());
         let complete = window.frames.len() >= target_nodes && target_nodes > 0;
 
@@ -56,17 +62,18 @@ impl NodeSynchronizer {
             return self.flush_window(slot);
         }
 
-        // Flush stale windows
-        let now_approx = slot;
+        // Flush stale windows using the newest-ever timestamp as the reference clock
         let stale_keys: Vec<u64> = self
             .windows
             .keys()
             .copied()
-            .filter(|&k| now_approx.saturating_sub(k) > STALE_LIMIT_US)
+            .filter(|&k| self.newest_ts_us.saturating_sub(k) > STALE_LIMIT_US)
             .collect();
 
         for k in stale_keys {
-            return self.flush_window(k);
+            if let Some(bundle) = self.flush_window(k) {
+                return Some(bundle);
+            }
         }
 
         None

@@ -44,7 +44,9 @@ void udp_sender_task(void *arg)
             int sent = sendto(sock, &frame, sizeof(csi_frame_t), 0,
                               (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             if (sent < 0) {
-                ESP_LOGW(TAG, "sendto failed: errno %d", errno);
+                if (errno != 118) { // EHOSTUNREACH (118) is expected during Wi-Fi reconnection
+                    ESP_LOGW(TAG, "sendto failed: errno %d", errno);
+                }
             }
         }
     }

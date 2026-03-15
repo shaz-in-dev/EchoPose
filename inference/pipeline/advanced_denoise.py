@@ -99,66 +99,50 @@ class AdvancedDenoiser:
 
     def compute_features(self) -> tuple[np.ndarray, dict]:
         """
-        Processes multi-stage denoising across all stored buffers.
+        Fast real-time feature extraction via direct FFT (Doppler PSD).
+        Skips heavy Wiener/Wavelet/STFT stages to maintain 20 Hz throughput.
         Returns:
             features: [num_nodes, num_sub, FFT_BINS]
             confidence_scores: Dict mapping node -> average feature confidence
         """
-        freqs    = np.fft.rfftfreq(self.window_size, d=1.0 / self.sample_hz)
-        lo_idx   = int(np.searchsorted(freqs, 0.3))
-        hi_idx   = int(np.searchsorted(freqs, 10.0))
         out_size = self.fft_bins
-
         features = np.zeros((self.num_nodes, self.num_sub, out_size), dtype=np.float32)
         node_confidence = {}
 
         for nid in range(self.num_nodes):
             buf = self.buffers[nid]
             confidences = []
-            
+
             for sub in range(self.num_sub):
                 data = list(buf[sub])
-                if len(data) < 20: 
-                    continue # Not enough data to confidently process
-                    
-                arr = np.array(data, dtype=np.float32)
-                
-                # Dynamic outlier rejection (Z-score > 3)
-                mean, std = np.mean(arr), np.std(arr)
-                if std > 0:
-                    arr = np.where(np.abs((arr - mean) / std) > 3, mean, arr)
+                if len(data) < 4:
+                    continue
 
-                # PIPELINE EXECUTION
-                clean_sig = arr
-                if 'wiener' in self.stages:
-                    clean_sig = self._apply_wiener(clean_sig)
-                if 'wavelet' in self.stages:
-                    clean_sig = self._apply_wavelet(clean_sig)
-                if 'spectral' in self.stages:
-                    clean_sig = self._spectral_subtraction(clean_sig)
-                
-                # Final Feature Extraction (Doppler PSD via Hanning Window)
-                window = np.hanning(len(clean_sig))
-                spectrum = np.abs(np.fft.rfft(clean_sig * window, n=self.window_size)) ** 2
-                band = spectrum[lo_idx:hi_idx]
-                
-                if len(band) > 0:
-                    # Resize to dense feature vector space
+                arr = np.array(data, dtype=np.float32)
+                # Simple mean subtraction (background removal)
+                arr -= arr.mean()
+
+                # Direct FFT for Doppler spectrum
+                window = np.hanning(len(arr))
+                spectrum = np.abs(np.fft.rfft(arr * window)) ** 2
+
+                if len(spectrum) > 0:
+                    # Resize spectrum to output size
                     resized = np.interp(
-                        np.linspace(0, len(band) - 1, out_size),
-                        np.arange(len(band)),
-                        band
+                        np.linspace(0, len(spectrum) - 1, out_size),
+                        np.arange(len(spectrum)),
+                        spectrum
                     )
                     mx = resized.max()
-                    if mx > 0: resized /= mx
+                    if mx > 0:
+                        resized /= mx
                     features[nid, sub] = resized
-                    
-                # Compute subcarrier measurement confidence (Entropy of spectrum)
-                if np.sum(spectrum) > 0:
-                    prob = spectrum / np.sum(spectrum)
+
+                    # Confidence from spectral peakiness
+                    prob = resized / (resized.sum() + 1e-12)
                     entropy = -np.sum(prob * np.log2(prob + 1e-12))
-                    confidences.append(1.0 / (1.0 + entropy)) # Lower entropy = sharper Doppler = higher conf
+                    confidences.append(1.0 / (1.0 + entropy))
 
             node_confidence[nid] = np.mean(confidences) if confidences else 0.0
-            
+
         return features, node_confidence

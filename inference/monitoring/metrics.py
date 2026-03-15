@@ -13,33 +13,38 @@ class SystemMetrics:
     def __init__(self, port=9090):
         # Prevent double registration issues during testing/reloads
         import prometheus_client
-        prometheus_client.REGISTRY = prometheus_client.CollectorRegistry(auto_describe=True)
+        registry = prometheus_client.CollectorRegistry(auto_describe=True)
         
         self.latency_ms = Histogram(
             'echo_pose_inference_latency_ms', 
-            'End-to-end inference latency in milliseconds'
+            'End-to-end inference latency in milliseconds',
+            registry=registry
         )
         self.confidence_score = Gauge(
             'echo_pose_inference_confidence', 
-            'Average skeleton confidence score'
+            'Average skeleton confidence score',
+            registry=registry
         )
         self.node_health = Gauge(
             'echo_pose_node_health', 
             'Node health percentage', 
-            ['node_id']
+            ['node_id'],
+            registry=registry
         )
         self.frame_drops = Counter(
             'echo_pose_frame_drop_total', 
-            'Total skipped or corrupted frames'
+            'Total skipped or corrupted frames',
+            registry=registry
         )
         self.memory_mb = Gauge(
             'echo_pose_memory_usage_mb', 
-            'System memory usage in MB'
+            'System memory usage in MB',
+            registry=registry
         )
         
         # Start Prometheus scraping server in background
         try:
-            start_http_server(port)
+            start_http_server(port, registry=registry)
         except OSError:
             pass # Already running in this process/port
 

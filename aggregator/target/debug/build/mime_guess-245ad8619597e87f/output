@@ -1,1 +1,0 @@
-cargo:rustc-env=MIME_TYPES_GENERATED_PATH=c:\Users\Admin\wifi vision\aggregator\target\debug\build\mime_guess-245ad8619597e87f\out\mime_types_generated.rs

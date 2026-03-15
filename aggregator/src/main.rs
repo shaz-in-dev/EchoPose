@@ -52,12 +52,11 @@ struct CalibrationState {
     // [node_id] -> (summed_iq_data, sample_count)
     accumulators: HashMap<u8, (Vec<f32>, u32)>,
     // [node_id] -> averaged baseline
-    baselines: HashMap<u8, Vec<i16>>,
+    baselines: HashMap<u8, Vec<f32>>,
 }
 
 type NodeTracker = Arc<RwLock<HashMap<u8, NodeStats>>>;
 
-#[derive(Clone)]
 // AppState Definition
 #[derive(Clone)]
 struct AppState {
@@ -113,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
 
     let bcast_cap: usize = 256;
 
-    let (tx, _rx) = broadcast::channel::<SyncedBundle>(BCAST_CAP);
+    let (tx, _rx) = broadcast::channel::<SyncedBundle>(bcast_cap);
     let tx_udp = tx.clone();
 
     let expected_nodes_clone = expected_nodes;
@@ -155,10 +154,15 @@ async fn main() -> anyhow::Result<()> {
 
             // Update tracker stats & apply calibration
             let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+            
+            // Critical Sync Fix: Overwrite unaligned device uptimes with host arrival time
+            frame.timestamp_us = now_ms * 1000;
+
             {
                 let mut tr = tracker_udp.write().await;
                 let stats = tr.entry(frame.node_id).or_insert(NodeStats { last_seen_ms: 0, packet_count: 0 });
                 stats.packet_count += 1;
+                stats.last_seen_ms = now_ms; // Fix missing heartbeat
                 
                 // V3: Record RSSI for automated localization
                 let mut loc = localization_udp.write().await;
@@ -170,9 +174,9 @@ async fn main() -> anyhow::Result<()> {
                 if cal.is_calibrating {
                     if now_ms < cal.end_ms {
                         // Accumulate samples for baseline average
-                        let entry = cal.accumulators.entry(frame.node_id).or_insert((vec![0.0; frame.iq_data.len()], 0));
-                        for (i, &val) in frame.iq_data.iter().enumerate() {
-                            entry.0[i] += val as f32;
+                        let entry = cal.accumulators.entry(frame.node_id).or_insert((vec![0.0; frame.amplitudes.len()], 0));
+                        for (i, &val) in frame.amplitudes.iter().enumerate() {
+                            entry.0[i] += val;
                         }
                         entry.1 += 1;
                     } else {
@@ -181,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
                         cal.baselines.clear();
                         let accumulators: Vec<_> = cal.accumulators.drain().collect(); // Move out values before iterating
                         for (node_id, (sum, count)) in accumulators {
-                            let baseline: Vec<i16> = sum.into_iter().map(|val| (val / count as f32) as i16).collect();
+                            let baseline: Vec<f32> = sum.into_iter().map(|val| val / count as f32).collect();
                             cal.baselines.insert(node_id, baseline);
                         }
                         info!("Room Calibration Complete: Static noise floor baselines calculated.");
@@ -191,8 +195,8 @@ async fn main() -> anyhow::Result<()> {
                 // Explicit baseline subtraction while holding the lock
                 if !cal.is_calibrating {
                     if let Some(baseline) = cal.baselines.get(&frame.node_id) {
-                        for i in 0..frame.iq_data.len().min(baseline.len()) {
-                            frame.iq_data[i] = frame.iq_data[i].saturating_sub(baseline[i]);
+                        for i in 0..frame.amplitudes.len().min(baseline.len()) {
+                            frame.amplitudes[i] = (frame.amplitudes[i] - baseline[i]).max(0.0);
                         }
                     }
                 }

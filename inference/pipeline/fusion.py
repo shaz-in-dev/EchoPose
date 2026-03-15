@@ -10,6 +10,7 @@ from typing import Any, Dict
 from pipeline.advanced_denoise import AdvancedDenoiser
 from pipeline.robust_processing import RobustCSIProcessor
 import os
+import numpy as np
 
 EXPECTED_NODES = int(os.getenv("EXPECTED_NODES", "3"))
 

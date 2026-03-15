@@ -22,7 +22,8 @@ class CsiHeatmap {
   }
 
   push(framesByNode) {
-    const frame = framesByNode[this.nodeId];
+    // JSON keys are always strings; coerce nodeId to match
+    const frame = framesByNode[String(this.nodeId)] ?? framesByNode[this.nodeId];
     if (!frame) return;
     const row = this.history[this.head % this.steps];
     frame.amplitudes.slice(0, this.numSub).forEach((v, i) => row[i] = v);
