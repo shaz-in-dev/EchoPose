@@ -64,7 +64,7 @@ class HighThroughputServer:
             features = self.fusion.process_bundle(bundle)
             
             # 2. ML Inference (Slow, dispatch to ThreadPoolExecutor so UI doesn't freeze)
-            skeletons = await asyncio.to_thread(self.model.batch_inference, [features])
+            skeletons = await self.model.batch_inference([features])
             
             # 3. Broadcast to all active clients concurrently
             payload = json.dumps({"skeletons": skeletons[0] if skeletons else []})

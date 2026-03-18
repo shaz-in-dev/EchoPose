@@ -24,9 +24,9 @@ services:
       - ./inference:/app
       - ./.env:/app/.env
     command: >
-      sh -c "pip install -r requirements.txt -q && gunicorn server:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}"
+      sh -c "pip install -r requirements.txt -q && gunicorn server:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}"
     ports:
-      - "${INFERENCE_WS_PORT:-8765}:${INFERENCE_WS_PORT:-8765}"    # WebSocket to UI
+      - "${INFERENCE_WS_PORT:-8765}"    # WebSocket to UI
     env_file:
       - .env
     depends_on:

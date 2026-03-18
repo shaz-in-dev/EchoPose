@@ -1,0 +1,20 @@
+# Compiled code
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Rust
+target/
+
+# Logs and Artifacts
+logs/
+*.log
+*.sqlite
+firmware/build/
+.env
+
+# Virtual environments
+venv/
+env/
+ENV/

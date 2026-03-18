@@ -166,7 +166,9 @@ async fn main() -> anyhow::Result<()> {
                 
                 // V3: Record RSSI for automated localization
                 let mut loc = localization_udp.write().await;
-                loc.record_rssi(frame.node_id, 0, -50 - (frame.node_id as i16 * 10)); // Simulated RSSI
+                let mean_amp = frame.amplitudes.iter().sum::<f32>() / frame.amplitudes.len() as f32;
+                let rssi = (20.0 * mean_amp.max(1e-6).log10()) as i16 - 50;
+                loc.record_rssi(frame.node_id, 0, rssi);
             }
 
             {
@@ -223,8 +225,14 @@ async fn main() -> anyhow::Result<()> {
         expected_nodes,
     };
 
+    let origins: Vec<axum::http::HeaderValue> = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:8000,http://localhost:8080".to_string())
+        .split(',')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(origins)
         .allow_methods(Any)
         .allow_headers(Any);
 

@@ -170,7 +170,7 @@ async def aggregator_loop():
         try:
             await connect_and_process(fusion_pipeline)
         except Exception as e:
-            logger.error(f"Aggregator WS exhausted all retries! Connection failed: {e}. Rebounding in 10s...")
+            logger.warning(f"Aggregator WS exhausted all retries! Connection failed: {e}. Rebounding in 10s...")
             await asyncio.sleep(10)
 
 

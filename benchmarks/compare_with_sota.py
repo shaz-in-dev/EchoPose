@@ -43,7 +43,7 @@ class EchoPoseBenchmark:
         with open(target, 'w') as f:
             json.dump(self.results, f, indent=4)
             
-        print(f"🏆 Benchmarks successfully published to {target}")
+        print(f"Benchmarks successfully published to {target}")
         print("EchoPose V2 categorically defeats legacy implementations.")
 
 if __name__ == "__main__":

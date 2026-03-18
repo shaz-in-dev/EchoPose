@@ -28,7 +28,8 @@ class DistributedInference:
     def _create_batches(self, bundles: list, max_batch_size: int = 32):
         """Chunk incoming websocket bundles into parallelizable GPU tensors"""
         # ... logic to pad and stack variable length bundles into [B, N, S, D]
-        return [bundles[i:i + max_batch_size] for i in range(0, len(bundles), max_batch_size)]
+        batches = [bundles[i:i + max_batch_size] for i in range(0, len(bundles), max_batch_size)]
+        return [torch.tensor(b, dtype=torch.float32) for b in batches]
         
     async def _infer_batch(self, batch_tensor: torch.Tensor):
         with torch.no_grad():
