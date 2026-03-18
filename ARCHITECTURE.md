@@ -1,6 +1,6 @@
 # EchoPose Architecture
 
-EchoPose V3 represents the absolute pinnacle of zero-vision human tracking. We have completely decoupled the stack into a high-performance Rust hardware layer and an asynchronously scaled Python/PyTorch inference layer.
+EchoPose V3 represents the absolute pinnacle of zero-vision human tracking. We have completely decoupled the stack into a high-performance Rust hardware layer and an asynchronously scaled Python/ONNX inference layer.
 
 ## The Tri-Node Geometry
 The system requires exactly 3 ESP32-S3 devices running custom native C firmware. 

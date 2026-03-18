@@ -56,7 +56,13 @@ class AdvancedDenoiser:
         """Daubechies Wavelet denoising using soft thresholding (Universal Threshold)."""
         if len(sig) < 8: return sig
         # Decompose signal using Daubechies 4 wavelet (db4)
-        coeffs = pywt.wavedec(sig, 'db4', level=int(np.log2(len(sig)))-1)
+        wavelet = pywt.Wavelet('db4')
+        requested_level = int(np.log2(len(sig))) - 1
+        max_level = pywt.dwt_max_level(len(sig), wavelet.dec_len)
+        level = min(requested_level, max_level)
+        if level < 1:
+            return sig
+        coeffs = pywt.wavedec(sig, wavelet, level=level)
         
         # Estimate noise variance from details (highest freq subband)
         sigma = np.median(np.abs(coeffs[-1])) / 0.6745 
@@ -66,7 +72,7 @@ class AdvancedDenoiser:
         denoised_coeffs = [coeffs[0]] + [pywt.threshold(c, value=uthresh, mode='soft') for c in coeffs[1:]]
         
         # Reconstruct and strictly enforce length boundaries to prevent silent truncation data-loss
-        reconstructed = pywt.waverec(denoised_coeffs, 'db4')
+        reconstructed = pywt.waverec(denoised_coeffs, wavelet)
         if len(reconstructed) > len(sig):
             return reconstructed[:len(sig)]
         elif len(reconstructed) < len(sig):

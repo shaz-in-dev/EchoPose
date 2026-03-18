@@ -9,7 +9,7 @@ can handle thousands of concurrent WebSocket connections and UI commands without
 import asyncio
 import json
 import logging
-from faststream import FastStream
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -17,14 +17,6 @@ from pipeline.fusion import FusionPipeline
 from gpu_server import DistributedInference
 
 logger = logging.getLogger("rf_inference.async_server")
-app = FastAPI(title="EchoPose V2 High-Throughput Server")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080").split(","),
-    allow_methods=["GET", "POST", "OPTIONS"], 
-    allow_headers=["*"]
-)
 
 class HighThroughputServer:
     """Manages concurrent UI clients and non-blocking inference decoupling"""
@@ -93,10 +85,25 @@ class HighThroughputServer:
 
 server = HighThroughputServer()
 
-@app.on_event("startup")
-async def startup():
-    # Spin up the background worker threads immediately
-    asyncio.create_task(server._infer_continuously())
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Spin up the background worker and stop it cleanly during shutdown.
+    worker = asyncio.create_task(server._infer_continuously())
+    try:
+        yield
+    finally:
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+
+
+app = FastAPI(title="EchoPose V2 High-Throughput Server", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080").split(","),
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 @app.websocket("/ws/pose")
 async def pose_stream(ws: WebSocket):

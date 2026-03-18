@@ -31,8 +31,9 @@ docker-compose up -d --scale inference=$WORKER_COUNT
 # 4. Wait for Health Checks
 echo "Waiting for services to come online..."
 sleep 5
-until curl -s http://localhost:8765/health > /dev/null; do
-    echo "Waiting for Inference Engine..."
+GATEWAY_PORT=${INFERENCE_GATEWAY_PORT:-8765}
+until curl -s "http://localhost:${GATEWAY_PORT}/health" > /dev/null; do
+    echo "Waiting for Inference Gateway..."
     sleep 2
 done
 

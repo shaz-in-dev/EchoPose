@@ -8,6 +8,7 @@ for maximum batch throughput in enterprise deployments.
 import torch
 import torch.nn as nn
 import asyncio
+import numpy as np
 from pipeline.pose_net_v2 import PoseNetV2
 
 class DistributedInference:
@@ -29,7 +30,12 @@ class DistributedInference:
         """Chunk incoming websocket bundles into parallelizable GPU tensors"""
         # ... logic to pad and stack variable length bundles into [B, N, S, D]
         batches = [bundles[i:i + max_batch_size] for i in range(0, len(bundles), max_batch_size)]
-        return [torch.tensor(b, dtype=torch.float32) for b in batches]
+        out = []
+        for batch in batches:
+            # Build contiguous float32 arrays first to avoid slow tensor-from-list conversions.
+            batch_np = np.asarray(batch, dtype=np.float32)
+            out.append(torch.from_numpy(batch_np))
+        return out
         
     async def _infer_batch(self, batch_tensor: torch.Tensor):
         with torch.no_grad():

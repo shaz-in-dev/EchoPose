@@ -25,10 +25,20 @@ services:
       - ./.env:/app/.env
     command: >
       sh -c "pip install -r requirements.txt -q && gunicorn server:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}"
-    ports:
-      - "${INFERENCE_WS_PORT:-8765}"    # WebSocket to UI
+    expose:
+      - "${INFERENCE_WS_PORT:-8765}"    # internal only; exposed via inference_gateway
     env_file:
       - .env
     depends_on:
       - aggregator
+    restart: unless-stopped
+
+  inference_gateway:
+    image: nginx:1.27-alpine
+    ports:
+      - "${INFERENCE_GATEWAY_PORT:-8765}:8765"
+    volumes:
+      - ./deployment/nginx/inference_gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - inference
     restart: unless-stopped
