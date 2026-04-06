@@ -6,7 +6,7 @@ amplitude data from all nodes into a single [nodes, subcarriers, ...]
 matrix ready for the denoiser.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from pipeline.advanced_denoise import AdvancedDenoiser
 from pipeline.robust_processing import RobustCSIProcessor
 from research.disambiguation import MultiPersonDisambiguation
@@ -26,7 +26,7 @@ class FusionPipeline:
         self.robustness = RobustCSIProcessor(expected_nodes=EXPECTED_NODES)
         self.disambiguator = MultiPersonDisambiguation(max_people=3)
 
-    def process_bundle(self, bundle: Dict[str, Any]) -> np.ndarray:
+    def process_bundle(self, bundle: Dict[str, Any]) -> Tuple[np.ndarray, List]:
         """
         Push each node's amplitudes into the advanced denoiser.
         Extract Doppler features and pass them through adversarial bounds.

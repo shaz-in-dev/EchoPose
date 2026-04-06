@@ -145,7 +145,8 @@ async def connect_and_process(fusion_pipeline):
                 smoothed_skeletons = skeleton_filter.filter(skeletons)
                 
                 # Extract pipeline metrics for logging
-                mean_conf = np.mean([kp["confidence"] for s in smoothed_skeletons for kp in s]) if smoothed_skeletons and smoothed_skeletons[0] else 0.0
+                all_kp_confs = [kp["confidence"] for s in smoothed_skeletons for kp in s]
+                mean_conf = np.mean(all_kp_confs) if all_kp_confs else 0.0
                 node_health = fusion_pipeline.robustness.node_health
                 
                 # Extract amplitudes for the UI Heatmap

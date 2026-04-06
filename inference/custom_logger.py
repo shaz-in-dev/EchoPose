@@ -52,4 +52,5 @@ class StructuredLogger:
         self._file.flush()
 
     def close(self):
-        self._file.close()
+        if not self._file.closed:
+            self._file.close()

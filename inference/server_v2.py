@@ -12,6 +12,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 import os
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 import websockets
@@ -75,7 +76,6 @@ class HighThroughputServer:
             self.bundle_queue.task_done()
 
     async def _receive_ui_commands(self, ws: WebSocket):
-        import httpx
         while True:
             cmd = await ws.receive_text()
             if cmd == "calibrate":

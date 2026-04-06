@@ -83,8 +83,18 @@ class IncomingCSIBundle(BaseModel):
         return values
         
 # ── Encryption at Rest ─────────────────────────────────────────────
-FERNET_KEY = os.getenv("ECHOPOSE_SESSION_KEY", Fernet.generate_key().decode('utf-8'))
-cipher_suite = Fernet(FERNET_KEY.encode('utf-8'))
+_fernet_key_env = os.getenv("ECHOPOSE_SESSION_KEY")
+if _fernet_key_env:
+    try:
+        cipher_suite = Fernet(_fernet_key_env.encode('utf-8'))
+        FERNET_KEY = _fernet_key_env
+    except Exception:
+        logger.warning("ECHOPOSE_SESSION_KEY is invalid; generating a temporary session key.")
+        FERNET_KEY = Fernet.generate_key().decode('utf-8')
+        cipher_suite = Fernet(FERNET_KEY.encode('utf-8'))
+else:
+    FERNET_KEY = Fernet.generate_key().decode('utf-8')
+    cipher_suite = Fernet(FERNET_KEY.encode('utf-8'))
 
 def encrypt_session_data(data: dict) -> bytes:
     """Encrypt JSON session data using AES-256 for at-rest storage"""
