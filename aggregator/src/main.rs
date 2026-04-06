@@ -165,10 +165,12 @@ async fn main() -> anyhow::Result<()> {
                 stats.last_seen_ms = now_ms; // Fix missing heartbeat
                 
                 // V3: Record RSSI for automated localization
-                let mut loc = localization_udp.write().await;
-                let mean_amp = frame.amplitudes.iter().sum::<f32>() / frame.amplitudes.len() as f32;
-                let rssi = (20.0 * mean_amp.max(1e-6).log10()) as i16 - 50;
-                loc.record_rssi(frame.node_id, 0, rssi);
+                if !frame.amplitudes.is_empty() {
+                    let mut loc = localization_udp.write().await;
+                    let mean_amp = frame.amplitudes.iter().sum::<f32>() / frame.amplitudes.len() as f32;
+                    let rssi = (20.0 * mean_amp.max(1e-6).log10()) as i16 - 50;
+                    loc.record_rssi(frame.node_id, 0, rssi);
+                }
             }
 
             {

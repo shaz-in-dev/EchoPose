@@ -25,7 +25,7 @@ class PoseNetV2(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        in_channels = FEATURE_SHAPE[0] * 64 # Expand subcarriers & nodes dynamically
+        in_channels = FEATURE_SHAPE[0] * FEATURE_SHAPE[1]  # nodes * subcarriers
         
         # Stage 1: Multi-scale Feature Extraction
         # Captures micro-Doppler at various resolutions simultaneously

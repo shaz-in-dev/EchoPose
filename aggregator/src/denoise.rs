@@ -37,7 +37,7 @@ impl RollingDenoiser {
                 0.0
             } else {
                 let mut sorted: Vec<f32> = buf.iter().copied().collect();
-                sorted.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+                sorted.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 sorted[sorted.len() / 2]
             };
 
