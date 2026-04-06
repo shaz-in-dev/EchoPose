@@ -289,11 +289,12 @@ async fn localize_handler(State(state): State<Arc<AppState>>) -> impl IntoRespon
 
 // GET /config
 async fn config_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    use crate::sync::WINDOW_US;
     Json(serde_json::json!({
         "udp_port":       state.udp_port,
         "http_port":      state.http_port,
         "expected_nodes": state.expected_nodes,
-        "window_ms":      50,
+        "window_ms":      *WINDOW_US / 1_000,
     }))
 }
 

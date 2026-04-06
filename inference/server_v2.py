@@ -62,7 +62,9 @@ class HighThroughputServer:
             features, per_person = self.fusion.process_bundle(bundle)
             
             # 2. ML Inference (Slow, dispatch to ThreadPoolExecutor so UI doesn't freeze)
-            skeletons = await self.model.batch_inference([features])
+            # Pass all per-person feature tensors for multi-person inference
+            inference_input = per_person if per_person else [features]
+            skeletons = await self.model.batch_inference(inference_input)
             
             # 3. Broadcast to all active clients concurrently
             payload = json.dumps({"skeletons": skeletons[0] if skeletons else []})
