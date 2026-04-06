@@ -623,6 +623,7 @@ dependencies = [
  "bytes",
  "dashmap",
  "dotenvy",
+ "lazy_static",
  "serde",
  "serde_json",
  "tokio",
