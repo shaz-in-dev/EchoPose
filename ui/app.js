@@ -77,6 +77,122 @@ function handleFrame(data) {
     skeleton.updateSkeletons([data.keypoints]);
     updateKpTable(data.keypoints);
   }
+
+  // Analytics dashboard
+  if (data.analytics) {
+    updateAnalytics(data.analytics);
+  }
+}
+
+// ── Analytics Dashboard ───────────────────────────────────────────
+const analyticsCards = document.getElementById('analytics-cards');
+const btnToggleAnalytics = document.getElementById('btn-toggle-analytics');
+
+if (btnToggleAnalytics) {
+  btnToggleAnalytics.addEventListener('click', () => {
+    const hidden = analyticsCards.classList.toggle('collapsed');
+    btnToggleAnalytics.textContent = hidden ? 'Show' : 'Hide';
+  });
+}
+
+function updateAnalytics(a) {
+  // ── Vitals ──
+  const v = a.vitals || {};
+  const hr = v.heart_rate || {};
+  const rr = v.respiratory_rate || {};
+  const spo2 = v.spo2 || {};
+  const temp = v.temperature || {};
+  const bp = v.blood_pressure || {};
+
+  setText('v-hr',   hr.heart_rate != null ? hr.heart_rate : '--');
+  setText('v-rr',   rr.respiratory_rate != null ? rr.respiratory_rate : '--');
+  setText('v-spo2', spo2.spo2 != null ? spo2.spo2 : '--');
+  setText('v-temp', temp.temperature_c != null ? temp.temperature_c : '--');
+  setText('v-bp',   bp.systolic_mmhg != null
+    ? `${Math.round(bp.systolic_mmhg)}/${Math.round(bp.diastolic_mmhg)}`
+    : '--/--');
+
+  // ── Activity & Gait ──
+  const act = a.activity || {};
+  const gait = a.gait || {};
+  setText('v-activity', capitalize(act.activity || '--'));
+  setText('v-activity-conf', act.confidence != null ? `${(act.confidence * 100).toFixed(0)}% conf` : '');
+  setText('v-gait-speed',   gait.walking_speed_ms != null ? `${gait.walking_speed_ms} m/s` : '--');
+  setText('v-gait-cadence', gait.cadence_steps_min != null ? `${gait.cadence_steps_min} spm` : '--');
+  setText('v-gait-stride',  gait.stride_length_m != null ? `${gait.stride_length_m} m` : '--');
+  setText('v-gait-sym',     gait.gait_symmetry != null ? `${(gait.gait_symmetry * 100).toFixed(0)}%` : '--');
+
+  // ── Fall ──
+  const fall = a.fall || {};
+  const fallEl = document.getElementById('v-fall-status');
+  if (fallEl) {
+    if (fall.fall_detected) {
+      fallEl.textContent = 'FALL!';
+      fallEl.className = 'acard-big acard-big--critical';
+    } else {
+      fallEl.textContent = 'Safe';
+      fallEl.className = 'acard-big';
+    }
+  }
+  setText('v-fall-risk', fall.fall_risk || '--');
+  setText('v-fall-balance', fall.balance_score != null ? `${(fall.balance_score * 100).toFixed(0)}%` : '--');
+
+  // ── Gesture ──
+  const gest = a.gestures || {};
+  setText('v-gest-left',  capitalize(gest.left_hand || 'idle'));
+  setText('v-gest-right', capitalize(gest.right_hand || 'idle'));
+
+  // ── Sleep ──
+  const sleep = a.sleep || {};
+  setText('v-sleep-stage', sleep.sleep_stage || '--');
+  setText('v-sleep-conf',  sleep.confidence != null ? `${(sleep.confidence * 100).toFixed(0)}% conf` : '');
+
+  // ── Occupancy ──
+  const occ = a.occupancy || {};
+  setText('v-occupancy', occ.occupied ? 'Occupied' : 'Empty');
+  setText('v-occ-count', occ.num_people != null ? occ.num_people : '0');
+
+  // ── Stress ──
+  const emo = a.emotion || {};
+  setText('v-stress-level', emo.stress_level || '--');
+  setText('v-stress-score', emo.stress_score != null ? `${emo.stress_score.toFixed(0)} / 100` : '0 / 100');
+  const bar = document.getElementById('v-stress-bar');
+  if (bar) bar.style.width = `${emo.stress_score || 0}%`;
+
+  // ── Health Alerts ──
+  const alerts = a.health_alerts || {};
+  const alertEl = document.getElementById('v-alert-level');
+  if (alertEl) {
+    alertEl.textContent = alerts.alert_level || 'NORMAL';
+    alertEl.className = 'acard-big'
+      + (alerts.alert_level === 'CRITICAL' ? ' acard-big--critical' : '')
+      + (alerts.alert_level === 'WARNING'  ? ' acard-big--warning' : '');
+  }
+  const alertList = document.getElementById('v-alert-list');
+  if (alertList) {
+    if (alerts.anomalies && alerts.anomalies.length) {
+      alertList.innerHTML = alerts.anomalies.map(a =>
+        `<div class="acard-alert-item">${escapeHtml(a)}</div>`
+      ).join('');
+    } else {
+      alertList.innerHTML = '<span class="acard-sub">No anomalies</span>';
+    }
+  }
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function capitalize(s) {
+  return s && typeof s === 'string' ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
 }
 
 // ── Node Health Polling ───────────────────────────────────────────
@@ -255,6 +371,31 @@ function demoTick() {
     2: { amplitudes: Array.from({ length: 64 }, (_, i) => Math.abs(Math.sin(demoT * 0.12 + i * 0.25))) },
   });
   nodeCount.textContent = 3;
+
+  // Synthetic analytics for demo
+  const hrBase = 72 + 5 * Math.sin(demoT * 0.02);
+  const rrBase = 16 + 2 * Math.sin(demoT * 0.015);
+  const activities = ['standing', 'walking', 'running', 'sitting'];
+  const actIdx = Math.floor((demoT / 200) % activities.length);
+  const stressVal = 15 + 20 * Math.abs(Math.sin(demoT * 0.01));
+
+  updateAnalytics({
+    vitals: {
+      heart_rate:       { heart_rate: +hrBase.toFixed(1), confidence: 0.85 },
+      respiratory_rate: { respiratory_rate: +rrBase.toFixed(1), confidence: 0.80 },
+      spo2:             { spo2: +(97 + Math.random()).toFixed(1), confidence: 0.55 },
+      temperature:      { temperature_c: +(36.8 + 0.3 * Math.sin(demoT * 0.005)).toFixed(1), confidence: 0.60 },
+      blood_pressure:   { systolic_mmhg: 120, diastolic_mmhg: 80, confidence: 0.50 },
+    },
+    activity:  { activity: activities[actIdx], confidence: 0.82 },
+    gait:      { walking_speed_ms: +(0.8 + 0.3 * Math.sin(demoT * 0.03)).toFixed(2), cadence_steps_min: 108, stride_length_m: 0.72, gait_symmetry: 0.94, step_count: Math.floor(demoT / 10) },
+    fall:      { fall_detected: false, fall_risk: 'LOW', balance_score: 0.92 },
+    gestures:  { left_hand: 'idle', right_hand: demoT % 200 < 30 ? 'wave' : 'idle', confidence: 0.80 },
+    sleep:     { sleep_stage: 'AWAKE', confidence: 0.88 },
+    occupancy: { occupied: true, num_people: 1, method: 'skeleton', confidence: 0.95 },
+    emotion:   { stress_level: stressVal < 30 ? 'CALM' : 'MODERATE', stress_score: +stressVal.toFixed(1), hr_elevation_pct: 5.2, rr_elevation_pct: 3.1 },
+    health_alerts: { anomalies_detected: false, anomalies: [], alert_level: 'NORMAL' },
+  });
 }
 
 function startDemo() {

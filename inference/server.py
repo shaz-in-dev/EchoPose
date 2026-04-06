@@ -37,6 +37,14 @@ from dotenv import load_dotenv
 from pipeline.fusion import FusionPipeline
 from pipeline.pose   import PoseEstimator
 from pipeline.temporal_filter_v2 import TemporalPoseFilterV2
+from pipeline.vitals import VitalsExtractor
+from pipeline.activity import ActivityClassifier
+from pipeline.fall_detector import FallDetector
+from pipeline.sleep_analyzer import SleepAnalyzer
+from pipeline.gesture import GestureRecognizer
+from pipeline.occupancy import OccupancyAnalyzer
+from pipeline.emotion import EmotionDetector
+from pipeline.health_alerts import HealthAnomalyDetector
 
 from monitoring.metrics import SystemMetrics
 from custom_logger import StructuredLogger
@@ -72,6 +80,17 @@ app.add_middleware(
 
 estimator = PoseEstimator()
 skeleton_filter = TemporalPoseFilterV2(max_people=3)
+vitals_extractor = VitalsExtractor()
+activity_classifier = ActivityClassifier()
+fall_detector = FallDetector()
+sleep_analyzer = SleepAnalyzer()
+gesture_recognizer = GestureRecognizer()
+occupancy_analyzer = OccupancyAnalyzer()
+emotion_detector = EmotionDetector()
+health_alerter = HealthAnomalyDetector()
+
+# Latest analytics snapshot (updated each inference cycle)
+_latest_analytics: dict = {}
 class ConnectionManager:
     """Thread-safe WebSocket connection manager."""
     def __init__(self):
@@ -144,6 +163,61 @@ async def connect_and_process(fusion_pipeline):
                 skeletons = estimator.predict(features, per_person_features=per_person)
                 smoothed_skeletons = skeleton_filter.filter(skeletons)
                 
+                # ── Health & Activity Analytics ───────────────────
+                # Feed raw CSI amplitudes to vitals extractor
+                for f in bundle.get("frames", []):
+                    amps = np.array(f.get("amplitudes", []), dtype=np.float64)
+                    if amps.size:
+                        vitals_extractor.push(amps)
+
+                vitals = vitals_extractor.extract_all(features)
+
+                # Feed first skeleton to activity / fall / gesture / sleep modules
+                if smoothed_skeletons and len(smoothed_skeletons) > 0:
+                    first_skel = smoothed_skeletons[0]
+                    activity_classifier.push_skeleton(first_skel)
+                    fall_detector.push_skeleton(first_skel)
+                    gesture_recognizer.push_skeleton(first_skel)
+                    sleep_analyzer.push_motion(first_skel)
+
+                    hr_val = vitals.get("heart_rate", {}).get("heart_rate")
+                    rr_val = vitals.get("respiratory_rate", {}).get("respiratory_rate")
+                    sleep_analyzer.push_vitals(hr_val, rr_val)
+                    if hr_val and rr_val:
+                        emotion_detector.update_baselines(hr_val, rr_val)
+
+                activity = activity_classifier.classify_activity()
+                gait = activity_classifier.analyze_gait()
+                fall = fall_detector.detect()
+                gestures = gesture_recognizer.recognize()
+                sleep = sleep_analyzer.classify()
+                occupancy = occupancy_analyzer.detect_presence(smoothed_skeletons, features)
+                emotion = emotion_detector.estimate_stress(
+                    vitals.get("heart_rate", {}).get("heart_rate"),
+                    vitals.get("respiratory_rate", {}).get("respiratory_rate"),
+                    smoothed_skeletons[0] if smoothed_skeletons else None,
+                )
+                alerts = health_alerter.check(
+                    hr=vitals.get("heart_rate", {}).get("heart_rate"),
+                    rr=vitals.get("respiratory_rate", {}).get("respiratory_rate"),
+                    spo2=vitals.get("spo2", {}).get("spo2"),
+                    activity=activity.get("activity", "sitting"),
+                )
+
+                analytics = {
+                    "vitals": vitals,
+                    "activity": activity,
+                    "gait": gait,
+                    "fall": fall,
+                    "gestures": gestures,
+                    "sleep": sleep,
+                    "occupancy": occupancy,
+                    "emotion": emotion,
+                    "health_alerts": alerts,
+                }
+                global _latest_analytics
+                _latest_analytics = analytics
+
                 # Extract pipeline metrics for logging
                 all_kp_confs = [kp["confidence"] for s in smoothed_skeletons for kp in s]
                 mean_conf = np.mean(all_kp_confs) if all_kp_confs else 0.0
@@ -160,6 +234,7 @@ async def connect_and_process(fusion_pipeline):
                     "amplitudes": amps_dict,
                     "num_frames": len(bundle.get("frames", [])),
                     "simulation": estimator.is_simulation,
+                    "analytics": analytics,
                 })
 
                 await manager.broadcast(payload)
@@ -208,6 +283,13 @@ async def ws_pose(ws: WebSocket):
 async def health(request: Request):
     limiter.check_rate_limit(request.client.host)
     return {"status": "ok", "ui_clients": manager.count}
+
+
+@app.get("/analytics")
+async def analytics(request: Request):
+    """Return the latest health metrics, activity, and alert snapshot."""
+    limiter.check_rate_limit(request.client.host)
+    return _latest_analytics or {"status": "no_data"}
 
 
 if __name__ == "__main__":

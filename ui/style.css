@@ -86,6 +86,7 @@ body {
 .layout {
   display: grid;
   grid-template-columns: 1fr 320px;
+  grid-template-rows: 1fr auto;
   gap: 12px;
   padding: 12px;
   flex: 1;
@@ -103,7 +104,7 @@ body {
   overflow: hidden;
   box-shadow: var(--shadow);
 }
-.panel--primary { position: relative; }
+.panel--primary { position: relative; grid-row: 1; }
 
 .panel-header {
   display: flex;
@@ -120,6 +121,7 @@ body {
   flex-direction: column;
   gap: 10px;
   overflow: auto;
+  grid-row: 1;
 }
 .panel--heatmap  { flex: 0 0 auto; }
 .panel--keypoints{ flex: 1 1 auto; min-height: 0; overflow: auto; }
@@ -229,3 +231,142 @@ body {
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ── Analytics Strip (bottom row, spans full width) ── */
+.analytics-strip {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow: hidden;
+}
+.analytics-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.analytics-cards {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  transition: max-height 0.25s ease;
+}
+.analytics-cards.collapsed {
+  max-height: 0;
+  padding: 0 10px;
+  overflow: hidden;
+}
+
+/* ── Analytics Card ──────────────────────────────────── */
+.acard {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 150px;
+  max-width: 200px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.acard-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 8px 10px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.acard-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.acard-big {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent3);
+  text-align: center;
+  padding: 4px 0;
+}
+.acard-big--critical { color: var(--danger); animation: flash-alert 0.6s infinite alternate; }
+.acard-big--warning  { color: #fbbf24; }
+@keyframes flash-alert { from { opacity: 1; } to { opacity: 0.4; } }
+
+.acard-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.acard-divider {
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+.acard-detail {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text);
+}
+.acard-detail span:first-child { color: var(--text-muted); }
+.acard-detail span:last-child  { color: var(--accent); font-weight: 500; }
+
+/* ── Vitals card rows ────────────────────────────────── */
+.vital-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.vital-icon  { font-size: 13px; width: 18px; text-align: center; }
+.vital-label { color: var(--text-muted); width: 34px; font-size: 10px; text-transform: uppercase; }
+.vital-value { color: var(--accent); font-weight: 600; flex: 1; text-align: right; font-family: var(--mono); }
+.vital-unit  { color: var(--text-muted); font-size: 9px; width: 32px; }
+
+/* ── Stress meter ────────────────────────────────────── */
+.acard-meter {
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+.acard-meter-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent3), #fbbf24, var(--danger));
+  transition: width 0.3s ease;
+}
+
+/* ── Alert items ─────────────────────────────────────── */
+.acard-alert-list { max-height: 60px; overflow-y: auto; }
+.acard-alert-item {
+  font-size: 10px;
+  color: var(--danger);
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(248,113,113,0.1);
+}
+
+/* ── Card accent borders ─────────────────────────────── */
+.acard--vitals   { border-left: 3px solid var(--danger); }
+.acard--activity { border-left: 3px solid var(--accent); }
+.acard--fall     { border-left: 3px solid #fbbf24; }
+.acard--gesture  { border-left: 3px solid var(--accent2); }
+.acard--sleep    { border-left: 3px solid #a78bfa; }
+.acard--occupancy{ border-left: 3px solid var(--accent3); }
+.acard--emotion  { border-left: 3px solid #fb923c; }
+.acard--alerts   { border-left: 3px solid var(--danger); }

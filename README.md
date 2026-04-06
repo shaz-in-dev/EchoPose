@@ -15,6 +15,24 @@ EchoPose V2 is a production-ready Wi-Fi CSI pose estimation system featuring:
 - **Rate Limiting & API Key Auth:** All REST endpoints are protected by per-IP rate limiting (60 req/s) and API key verification.
 - **Accuracy Validation:** Built-in `scripts/validate_accuracy.py` computes MPJPE, PCK, and per-joint metrics.
 
+### Health Metrics & Vitals (NEW)
+- **Heart Rate Detection:** Chest micro-Doppler FFT extracts 40–180 bpm HR from CSI subcarriers 30–40.
+- **Respiratory Rate:** Thorax motion analysis detects 6–60 breaths/min via bandpass + Welch PSD.
+- **SpO2 Estimation:** Multi-frequency amplitude ratio proxy for blood oxygen saturation (85–100%).
+- **Body Temperature:** CSI amplitude variance correlation with calibrated thermal offset.
+- **Blood Pressure:** Pulse Wave Velocity (multi-node) or HR-based regression for systolic/diastolic estimation.
+
+### Activity & Analytics (NEW)
+- **Gait Analysis:** Walking speed, stride length, cadence, and gait symmetry from hip keypoint trajectories.
+- **Activity Classification:** Standing / Walking / Running / Sitting / Lying from skeleton geometry + Doppler.
+- **Fall Detection:** Centre-of-mass velocity monitoring with balance risk scoring and CRITICAL alerts.
+- **Exercise Counting:** Rep detection for push-ups, squats, jumping jacks, sit-ups via joint angle cycles.
+- **Gesture Recognition:** Wave, point, raise, swipe detection from wrist trajectory analysis.
+- **Occupancy Analytics:** Multi-method presence detection (skeleton + CSI energy + vital frequencies).
+- **Sleep Stage Classification:** Awake / N1 / N2 / N3 / REM from immobility + HRV + breathing regularity.
+- **Emotion & Stress Estimation:** 0–100 stress score from HR elevation, breathing rate, and postural cues.
+- **Health Anomaly Alerts:** Context-aware vital sign monitoring with NORMAL / WARNING / CRITICAL levels.
+
 ---
 
 ## Model Architecture & Accuracy
@@ -175,6 +193,33 @@ Bytes  4–5    node_id         uint16
 Bytes  6–13   timestamp_us    uint64   µs since ESP boot
 Bytes 14–15   num_subcarriers uint16   (always 64)
 Bytes 16–N    iq_data         int16[]  interleaved I, Q pairs
+```
+
+---
+
+## REST API
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/health` | GET | — | Server health & connected client count |
+| `/analytics` | GET | — | Latest health metrics, activity, vitals, alerts snapshot |
+| `/ws/pose` | WS | — | Real-time skeleton + analytics stream |
+| `/ingest` | POST | API key | Submit CSI bundle for inference (server_v2) |
+
+### `/analytics` Response Shape
+
+```json
+{
+  "vitals": { "heart_rate": {...}, "respiratory_rate": {...}, "spo2": {...}, "temperature": {...}, "blood_pressure": {...} },
+  "activity": { "activity": "walking", "confidence": 0.78 },
+  "gait": { "walking_speed_ms": 1.2, "cadence_steps_min": 110, ... },
+  "fall": { "fall_detected": false, "fall_risk": "LOW" },
+  "gestures": { "left_hand": "idle", "right_hand": "wave" },
+  "sleep": { "sleep_stage": "AWAKE", "confidence": 0.88 },
+  "occupancy": { "occupied": true, "num_people": 2 },
+  "emotion": { "stress_level": "CALM", "stress_score": 12.5 },
+  "health_alerts": { "alert_level": "NORMAL", "anomalies": [] }
+}
 ```
 
 ---

@@ -100,6 +100,128 @@
       </section>
 
     </aside>
+
+    <!-- ── Analytics Dashboard (full-width bottom) ──── -->
+    <section class="analytics-strip" id="analytics-strip">
+      <div class="analytics-strip-header">
+        <span class="panel-title">Health &amp; Activity Analytics</span>
+        <button id="btn-toggle-analytics" class="ctrl-btn">Hide</button>
+      </div>
+      <div class="analytics-cards" id="analytics-cards">
+
+        <!-- Vitals -->
+        <div class="acard acard--vitals">
+          <div class="acard-title">Vitals</div>
+          <div class="acard-body">
+            <div class="vital-row">
+              <span class="vital-icon">&#x2764;</span>
+              <span class="vital-label">HR</span>
+              <span class="vital-value" id="v-hr">--</span>
+              <span class="vital-unit">bpm</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">&#x1F6AB;</span>
+              <span class="vital-label">RR</span>
+              <span class="vital-value" id="v-rr">--</span>
+              <span class="vital-unit">br/m</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">&#x1F4A7;</span>
+              <span class="vital-label">SpO2</span>
+              <span class="vital-value" id="v-spo2">--</span>
+              <span class="vital-unit">%</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">&#x1F321;</span>
+              <span class="vital-label">Temp</span>
+              <span class="vital-value" id="v-temp">--</span>
+              <span class="vital-unit">&deg;C</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">&#x1F4C8;</span>
+              <span class="vital-label">BP</span>
+              <span class="vital-value" id="v-bp">--/--</span>
+              <span class="vital-unit">mmHg</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity -->
+        <div class="acard acard--activity">
+          <div class="acard-title">Activity</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-activity">--</div>
+            <div class="acard-sub" id="v-activity-conf"></div>
+            <div class="acard-divider"></div>
+            <div class="acard-detail"><span>Speed</span><span id="v-gait-speed">--</span></div>
+            <div class="acard-detail"><span>Cadence</span><span id="v-gait-cadence">--</span></div>
+            <div class="acard-detail"><span>Stride</span><span id="v-gait-stride">--</span></div>
+            <div class="acard-detail"><span>Symmetry</span><span id="v-gait-sym">--</span></div>
+          </div>
+        </div>
+
+        <!-- Fall & Balance -->
+        <div class="acard acard--fall">
+          <div class="acard-title">Fall Detection</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-fall-status">Safe</div>
+            <div class="acard-detail"><span>Risk</span><span id="v-fall-risk">--</span></div>
+            <div class="acard-detail"><span>Balance</span><span id="v-fall-balance">--</span></div>
+          </div>
+        </div>
+
+        <!-- Gestures -->
+        <div class="acard acard--gesture">
+          <div class="acard-title">Gestures</div>
+          <div class="acard-body">
+            <div class="acard-detail"><span>Left</span><span id="v-gest-left">idle</span></div>
+            <div class="acard-detail"><span>Right</span><span id="v-gest-right">idle</span></div>
+          </div>
+        </div>
+
+        <!-- Sleep -->
+        <div class="acard acard--sleep">
+          <div class="acard-title">Sleep Stage</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-sleep-stage">--</div>
+            <div class="acard-sub" id="v-sleep-conf"></div>
+          </div>
+        </div>
+
+        <!-- Occupancy -->
+        <div class="acard acard--occupancy">
+          <div class="acard-title">Occupancy</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-occupancy">--</div>
+            <div class="acard-detail"><span>People</span><span id="v-occ-count">0</span></div>
+          </div>
+        </div>
+
+        <!-- Stress / Emotion -->
+        <div class="acard acard--emotion">
+          <div class="acard-title">Stress</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-stress-level">--</div>
+            <div class="acard-meter">
+              <div class="acard-meter-fill" id="v-stress-bar" style="width: 0%"></div>
+            </div>
+            <div class="acard-sub" id="v-stress-score">0 / 100</div>
+          </div>
+        </div>
+
+        <!-- Health Alerts -->
+        <div class="acard acard--alerts">
+          <div class="acard-title">Health Alerts</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-alert-level">NORMAL</div>
+            <div class="acard-alert-list" id="v-alert-list">
+              <span class="acard-sub">No anomalies</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
   </main>
 
   <!-- ── Connection modal ─────────────────────────────── -->
