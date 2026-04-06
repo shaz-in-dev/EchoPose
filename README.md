@@ -33,6 +33,21 @@ EchoPose V2 is a production-ready Wi-Fi CSI pose estimation system featuring:
 - **Emotion & Stress Estimation:** 0–100 stress score from HR elevation, breathing rate, and postural cues.
 - **Health Anomaly Alerts:** Context-aware vital sign monitoring with NORMAL / WARNING / CRITICAL levels.
 
+### Advanced Security & Situational Awareness (NEW)
+- **Through-Wall Target Tracking:** Multi-target detection and tracking through solid structures using CSI Doppler signatures.
+- **Crowd Analytics:** Real-time crowd density estimation, flow direction, and spectral occupancy analysis.
+- **Posture Classification:** Detect standing, crouching, prone, crawling, and surrender postures from skeleton geometry.
+- **Acoustic Event Detection:** Impulse and anomaly detection from CSI amplitude transients (gunshot-like, explosion-like, glass-break).
+- **Behavioural Anomaly Scanning:** Calibrated baseline comparison to flag unusual movement or environmental changes.
+- **Intent Prediction:** Movement trajectory and posture-based intent forecasting (approaching, retreating, loitering, evading).
+- **Anti-Jamming & RF Integrity:** Real-time detection of signal jamming, spoofing, and interference with alert logging.
+- **Coverage Planning:** Sensor placement optimization with wall-aware signal propagation modeling.
+- **Multi-Domain Sensor Fusion:** Combines WiFi CSI, acoustic, and RF modalities into unified situational tracks.
+- **Gait Biometrics:** Walking pattern fingerprinting for person re-identification across sessions.
+- **Indoor Mapping:** Progressive environment reconstruction from CSI reflection patterns.
+- **Stealth & Low-Observable Mode:** Reduced emission profiles and encrypted data channels for sensitive deployments.
+- **Perimeter Intrusion Detection:** Zone-based alerting for unauthorized entry via weapon/threat-class signal signatures.
+
 ---
 
 ## Model Architecture & Accuracy
@@ -203,7 +218,8 @@ Bytes 16–N    iq_data         int16[]  interleaved I, Q pairs
 |----------|--------|------|-------------|
 | `/health` | GET | — | Server health & connected client count |
 | `/analytics` | GET | — | Latest health metrics, activity, vitals, alerts snapshot |
-| `/ws/pose` | WS | — | Real-time skeleton + analytics stream |
+| `/tactical` | GET | — | Latest security & situational awareness snapshot |
+| `/ws/pose` | WS | — | Real-time skeleton + analytics + tactical stream |
 | `/ingest` | POST | API key | Submit CSI bundle for inference (server_v2) |
 
 ### `/analytics` Response Shape
@@ -222,9 +238,22 @@ Bytes 16–N    iq_data         int16[]  interleaved I, Q pairs
 }
 ```
 
----
+### `/tactical` Response Shape
 
-## Security
+```json
+{
+  "targets": [{"id": 0, "x": 1.2, "y": -0.3, "z": 0.8, "doppler": 0.15, "confidence": 0.72}],
+  "crowd": {"density": 3.5, "flow_direction_deg": 45.0, "spectral_occupancy": 0.28},
+  "anomalies": {"is_anomaly": false, "deviation": 0.12},
+  "acoustic": {"events": []},
+  "intent": {"label": "APPROACHING", "confidence": 0.65},
+  "anti_jamming": {"jamming_detected": false, "snr": 18.5},
+  "coverage": {"sensor_count": 3, "covered_pct": 0.82},
+  "tactical_activity": {"activity": "STANDING", "confidence": 0.91}
+}
+```
+
+---
 
 - **Rate Limiting:** Token-bucket per-IP limiter (60 req/s) on all HTTP endpoints
 - **API Key Auth:** `X-EchoPose-Token` header required on data-ingestion endpoints
