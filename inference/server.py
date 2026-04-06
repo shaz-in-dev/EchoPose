@@ -30,7 +30,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 import numpy as np
 import uvicorn
 import websockets
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -205,7 +205,8 @@ async def ws_pose(ws: WebSocket):
 
 # ── REST ──────────────────────────────────────────────────────────
 @app.get("/health")
-async def health():
+async def health(request: Request):
+    limiter.check_rate_limit(request.client.host)
     return {"status": "ok", "ui_clients": manager.count}
 
 

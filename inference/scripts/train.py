@@ -74,10 +74,11 @@ def train(args):
         for features, targets in loader:
             features, targets = features.to(device), targets.to(device)
 
-            preds = model(features)  # [B, MAX_PEOPLE * 17 * 4]
+            preds = model(features)  # [B, MAX_PEOPLE, 17, 4]
+            preds_flat = preds.view(preds.size(0), -1)  # [B, MAX_PEOPLE * 17 * 4]
             targets_flat = targets.view(targets.size(0), -1)
 
-            loss = criterion(preds, targets_flat)
+            loss = criterion(preds_flat, targets_flat)
 
             optimizer.zero_grad()
             loss.backward()

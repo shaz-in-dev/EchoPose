@@ -30,11 +30,12 @@ def export_to_onnx():
         dummy_input,
         str(onnx_path),
         export_params=True,
-        opset_version=17,
+        opset_version=13,
         do_constant_folding=True,
         input_names=["csi_features"],
         output_names=["keypoints"],
-        dynamic_axes={"csi_features": {0: "batch_size"}, "keypoints": {0: "batch_size"}}
+        dynamic_axes={"csi_features": {0: "batch_size"}, "keypoints": {0: "batch_size"}},
+        dynamo=False,
     )
 
     sha = hashlib.sha256(onnx_path.read_bytes()).hexdigest()

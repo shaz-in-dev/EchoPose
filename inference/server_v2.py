@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
@@ -143,14 +143,16 @@ async def pose_stream(ws: WebSocket):
     await server.handle_client(ws)
     
 @app.post("/ingest")
-async def ingest_bundle(bundle: dict):
+async def ingest_bundle(bundle: dict, request: Request, _key: str = Depends(verify_api_key)):
     """Aggregator sends bundles here via HTTP/WS. Queue it for non-blocking processing."""
+    limiter.check_rate_limit(request.client.host)
     if not server.bundle_queue.full():
         await server.bundle_queue.put(bundle)
     return {"status": "queued"}
 
 @app.get("/health")
-async def health():
+async def health(request: Request):
+    limiter.check_rate_limit(request.client.host)
     return {
         "status": "ok",
         "ui_clients": len(server.clients),

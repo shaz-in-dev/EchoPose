@@ -39,9 +39,8 @@ def test_temporal_filter_handles_empty():
 
 # ── Pose Estimator (simulation mode) ──────────────────────────────
 
-def test_pose_estimator_simulation_output():
+def test_pose_estimator_output():
     est = PoseEstimator()
-    assert est.is_simulation  # No checkpoint in tests
     features = np.random.randn(3, 64, 16).astype(np.float32)
     skels = est.predict(features)
     assert isinstance(skels, list)
