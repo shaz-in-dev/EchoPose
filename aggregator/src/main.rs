@@ -169,7 +169,9 @@ async fn main() -> anyhow::Result<()> {
                     let mut loc = localization_udp.write().await;
                     let mean_amp = frame.amplitudes.iter().sum::<f32>() / frame.amplitudes.len() as f32;
                     let rssi = (20.0 * mean_amp.max(1e-6).log10()) as i16 - 50;
-                    loc.record_rssi(frame.node_id, 0, rssi);
+                    // Use peer port LSB as a proxy for receiving-node identity
+                    let seen_by = (peer.port() & 0xFF) as u8;
+                    loc.record_rssi(frame.node_id, seen_by, rssi);
                 }
             }
 
@@ -268,8 +270,22 @@ async fn nodes_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse 
     Json(tr.clone())
 }
 
-// POST /calibrate — Start the 5-second static room calibration
-async fn calibrate_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+// POST /calibrate — Start the 5-second static room calibration (token-gated)
+async fn calibrate_handler(
+    headers: axum::http::HeaderMap,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    // Simple bearer-token auth to prevent unauthorized calibration resets
+    let expected = std::env::var("ECHOPOSE_API_TOKEN").unwrap_or_default();
+    if !expected.is_empty() {
+        let provided = headers
+            .get("X-EchoPose-Token")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+        if provided != expected {
+            return Json(serde_json::json!({"error": "unauthorized"}));
+        }
+    }
     let mut cal = state.calibration.write().await;
     cal.is_calibrating = true;
     cal.end_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 + 5000;
@@ -280,11 +296,14 @@ async fn calibrate_handler(State(state): State<Arc<AppState>>) -> impl IntoRespo
 
 // GET /localize — Run the solver and return estimated (x,y,z) coordinates
 async fn localize_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let loc = state.localization.read().await;
-    let tr = state.tracker.read().await;
-    let node_ids: Vec<u8> = tr.keys().cloned().collect();
-    
-    let result = loc.solve(&node_ids);
+    // Clone data under lock, then release before expensive compute
+    let loc_snapshot = state.localization.read().await.clone();
+    let node_ids: Vec<u8> = state.tracker.read().await.keys().cloned().collect();
+
+    // Run the iterative solver off the async executor
+    let result = tokio::task::spawn_blocking(move || loc_snapshot.solve(&node_ids))
+        .await
+        .unwrap_or_default();
     info!("Automated Localization: Estimated positions for {} nodes.", result.len());
     Json(result)
 }

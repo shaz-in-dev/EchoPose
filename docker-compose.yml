@@ -18,13 +18,15 @@ services:
     restart: unless-stopped
 
   inference:
-    image: python:3.11-slim
+    build:
+      context: ./inference
+      dockerfile: Dockerfile
+    image: echopose_inference:latest
     working_dir: /app
     volumes:
-      - ./inference:/app
       - ./.env:/app/.env
     command: >
-      sh -c "pip install -r requirements.txt -q && gunicorn server:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}"
+      gunicorn server:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}
     expose:
       - "${INFERENCE_WS_PORT:-8765}"    # internal only; exposed via inference_gateway
     env_file:
@@ -40,13 +42,15 @@ services:
       retries: 3
 
   inference_v2:
-    image: python:3.11-slim
+    build:
+      context: ./inference
+      dockerfile: Dockerfile
+    image: echopose_inference_v2:latest
     working_dir: /app
     volumes:
-      - ./inference:/app
       - ./.env:/app/.env
     command: >
-      sh -c "pip install -r requirements.txt -q && gunicorn server_v2:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}"
+      gunicorn server_v2:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}
     expose:
       - "${INFERENCE_WS_PORT:-8765}"
     env_file:

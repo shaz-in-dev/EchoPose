@@ -18,7 +18,14 @@ from cryptography.fernet import Fernet
 logger = logging.getLogger("rf_inference.security")
 
 API_KEY_HEADER = APIKeyHeader(name="X-EchoPose-Token", auto_error=False)
-VALID_TOKENS = {os.getenv("ECHOPOSE_API_TOKEN", "change_me_in_production")}
+
+_raw_token = os.getenv("ECHOPOSE_API_TOKEN", "")
+if not _raw_token or _raw_token == "change_me_in_production":
+    logger.warning(
+        "ECHOPOSE_API_TOKEN is not set or uses the insecure default. "
+        "Set a strong token via environment variable before production deployment."
+    )
+VALID_TOKENS = {_raw_token} if _raw_token else set()
 
 class RateLimiter:
     """Token Bucket rate limiter to prevent DoS attacks on the inference pipeline"""

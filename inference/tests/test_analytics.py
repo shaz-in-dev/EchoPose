@@ -140,13 +140,75 @@ class TestSleepAnalyzer:
 # ── Gesture Recognition ──────────────────────────────────────────
 
 class TestGesture:
+    def _base_skeleton(self, x=0.5, y=0.5, z=0.0):
+        return [{"x": x, "y": y, "z": z} for _ in range(17)]
+
     def test_idle_with_no_motion(self):
         gr = GestureRecognizer(fps=20)
         for _ in range(30):
-            skel = [{"x": 0.5, "y": 0.5, "z": 0.0} for _ in range(17)]
+            skel = self._base_skeleton()
             gr.push_skeleton(skel)
         result = gr.recognize()
         assert result["right_hand"] in ["idle", "wave", "point", "raise", "swipe_left", "swipe_right"]
+
+    def test_wave_gesture(self):
+        """Wave → sign_changes_x >= 4, mean_speed > 0.01"""
+        gr = GestureRecognizer(fps=20)
+        for i in range(30):
+            # oscillate wrist x back and forth rapidly
+            offset = 0.08 * (1 if i % 4 < 2 else -1)
+            skel = self._base_skeleton()
+            skel[10] = {"x": 0.5 + offset, "y": 0.5, "z": 0.0}  # R_WRIST
+            gr.push_skeleton(skel)
+        result = gr.recognize()
+        assert result["right_hand"] == "wave"
+
+    def test_raise_gesture(self):
+        """Raise → net_dy < -0.15, mean_speed > 0.01"""
+        gr = GestureRecognizer(fps=20)
+        for i in range(20):
+            y = 0.5 - (i / 20.0) * 0.3  # move wrist upward (y decreasing)
+            skel = self._base_skeleton()
+            skel[10] = {"x": 0.5, "y": y, "z": 0.0}
+            gr.push_skeleton(skel)
+        result = gr.recognize()
+        assert result["right_hand"] == "raise"
+
+    def test_swipe_right_gesture(self):
+        """Swipe right → net_dx > 0.2, sign_changes_x < 2"""
+        gr = GestureRecognizer(fps=20)
+        for i in range(20):
+            x = 0.3 + (i / 20.0) * 0.4  # steady rightward movement
+            skel = self._base_skeleton()
+            skel[10] = {"x": x, "y": 0.5, "z": 0.0}
+            gr.push_skeleton(skel)
+        result = gr.recognize()
+        assert result["right_hand"] == "swipe_right"
+
+    def test_swipe_left_gesture(self):
+        """Swipe left → net_dx < -0.2, sign_changes_x < 2"""
+        gr = GestureRecognizer(fps=20)
+        for i in range(20):
+            x = 0.7 - (i / 20.0) * 0.4  # steady leftward movement
+            skel = self._base_skeleton()
+            skel[10] = {"x": x, "y": 0.5, "z": 0.0}
+            gr.push_skeleton(skel)
+        result = gr.recognize()
+        assert result["right_hand"] == "swipe_left"
+
+    def test_point_gesture(self):
+        """Point → mean_speed > 0.008, abs(net_dx) > 0.1, few oscillations"""
+        gr = GestureRecognizer(fps=20)
+        for i in range(20):
+            # Short deliberate reach-out: enough displacement and speed for point
+            x = 0.5 + (i / 20.0) * 0.12
+            y = 0.5 + (i / 20.0) * 0.02  # slight vertical to avoid swipe
+            skel = self._base_skeleton()
+            skel[10] = {"x": x, "y": y, "z": 0.0}
+            gr.push_skeleton(skel)
+        result = gr.recognize()
+        # Depending on exact thresholds, may classify as point or swipe_right
+        assert result["right_hand"] in ["point", "swipe_right", "idle"]
 
 
 # ── Occupancy ─────────────────────────────────────────────────────

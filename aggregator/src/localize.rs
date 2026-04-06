@@ -11,6 +11,7 @@ pub struct NodePosition {
 /// Automated Node Localization solver.
 /// Uses a simplified Multi-Dimensional Scaling (MDS) approach to estimate
 /// relative (x, y) coordinates of ESP32 nodes based on their inter-node signal strengths.
+#[derive(Clone)]
 pub struct LocalizationSolver {
     // node_id -> { other_node_id -> rssi }
     rssi_matrix: HashMap<u8, HashMap<u8, i16>>,

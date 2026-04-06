@@ -8,6 +8,15 @@ Extracts physiological signals from Channel State Information:
   - Body temperature estimation: CSI amplitude variance correlation
   - Blood pressure estimation: pulse wave velocity across nodes
 
+DISCLAIMER — EXPERIMENTAL / NOT CLINICALLY VALIDATED:
+  The SpO2, body temperature, and blood pressure estimates produced by this
+  module are **experimental proxy values** derived from WiFi signal
+  statistics.  They have NOT been validated against clinical-grade medical
+  devices and MUST NOT be used for medical diagnosis, treatment decisions, or
+  any safety-critical application.  Heart rate and respiratory rate
+  extraction from WiFi CSI has published peer-reviewed support, but the
+  absolute accuracy depends heavily on environment and calibration.
+
 All methods operate on raw CSI amplitude arrays [subcarriers] or
 [nodes, subcarriers] at the system's 20 Hz sampling rate.
 """

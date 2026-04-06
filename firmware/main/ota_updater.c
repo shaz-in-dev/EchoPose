@@ -9,10 +9,19 @@ static const char *TAG = "OTA_UPDATER";
 void start_ota_update(const char* url) {
     ESP_LOGI(TAG, "Starting OTA update from %s", url);
 
+    // WARNING: Production deployments MUST use HTTPS with a pinned CA certificate.
+    // Set CONFIG_OTA_CA_CERT via menuconfig to embed a PEM root CA, then
+    // assign cert_pem below. The current NULL cert is acceptable ONLY for
+    // local development over trusted networks.
+    extern const uint8_t server_cert_pem_start[] asm("_binary_ca_cert_pem_start");
+    extern const uint8_t server_cert_pem_end[]   asm("_binary_ca_cert_pem_end");
+
+    const bool use_tls = (strncmp(url, "https", 5) == 0);
+
     esp_http_client_config_t config = {
         .url = url,
-        .cert_pem = NULL, // Skipping cert validation for this local HTTP workflow
-        .skip_cert_common_name_check = true,
+        .cert_pem = use_tls ? (const char *)server_cert_pem_start : NULL,
+        .skip_cert_common_name_check = !use_tls,
         .crt_bundle_attach = NULL,
         .timeout_ms = 10000,
         .keep_alive_enable = true,
