@@ -222,6 +222,107 @@
 
       </div>
     </section>
+
+    <!-- ── Tactical Analytics (full-width bottom) ──── -->
+    <section class="analytics-strip tactical-strip" id="tactical-strip">
+      <div class="analytics-strip-header">
+        <span class="panel-title">Tactical Analytics</span>
+        <button id="btn-toggle-tactical" class="ctrl-btn">Hide</button>
+      </div>
+      <div class="analytics-cards" id="tactical-cards">
+
+        <!-- Threat Tracker -->
+        <div class="acard acard--threat">
+          <div class="acard-title">Threats</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-threat-level">GREEN</div>
+            <div class="acard-detail"><span>Targets</span><span id="t-target-count">0</span></div>
+            <div class="acard-detail"><span>Type</span><span id="t-target-type">--</span></div>
+          </div>
+        </div>
+
+        <!-- Concealment -->
+        <div class="acard acard--concealment">
+          <div class="acard-title">Concealment</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-concealed-count">0</div>
+            <div class="acard-sub">hidden targets</div>
+            <div class="acard-detail"><span>Quality</span><span id="t-scan-quality">--</span></div>
+          </div>
+        </div>
+
+        <!-- Weapon Detection -->
+        <div class="acard acard--weapon">
+          <div class="acard-title">Weapon</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-weapon-type">UNARMED</div>
+            <div class="acard-detail"><span>Confidence</span><span id="t-weapon-conf">--</span></div>
+            <div class="acard-detail"><span>Armor</span><span id="t-armor">--</span></div>
+          </div>
+        </div>
+
+        <!-- Crowd -->
+        <div class="acard acard--crowd">
+          <div class="acard-title">Crowd</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-crowd-count">0</div>
+            <div class="acard-sub" id="t-crowd-density">--</div>
+            <div class="acard-detail"><span>Category</span><span id="t-density-cat">SPARSE</span></div>
+          </div>
+        </div>
+
+        <!-- Tactical Activity -->
+        <div class="acard acard--tac-activity">
+          <div class="acard-title">Tac Activity</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-tac-activity">--</div>
+            <div class="acard-detail"><span>Conf</span><span id="t-tac-conf">--</span></div>
+          </div>
+        </div>
+
+        <!-- Anomalies -->
+        <div class="acard acard--anomaly">
+          <div class="acard-title">Anomalies</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-threat-assess">CLEAR</div>
+            <div class="acard-detail"><span>Found</span><span id="t-anomaly-count">0</span></div>
+            <div class="acard-detail"><span>Coverage</span><span id="t-scan-coverage">--</span></div>
+          </div>
+        </div>
+
+        <!-- Intent -->
+        <div class="acard acard--intent">
+          <div class="acard-title">Intent</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-intent">NORMAL</div>
+            <div class="acard-meter">
+              <div class="acard-meter-fill intent-bar" id="t-intent-bar" style="width: 0%"></div>
+            </div>
+            <div class="acard-detail"><span>Score</span><span id="t-intent-score">0</span></div>
+          </div>
+        </div>
+
+        <!-- Anti-Jam -->
+        <div class="acard acard--antijam">
+          <div class="acard-title">RF Status</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-jam-status">CLEAN</div>
+            <div class="acard-detail"><span>Threats</span><span id="t-jam-threats">0</span></div>
+          </div>
+        </div>
+
+        <!-- Sensor Fusion -->
+        <div class="acard acard--fusion">
+          <div class="acard-title">Fusion COP</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-fusion-tracks">0</div>
+            <div class="acard-sub">fused tracks</div>
+            <div class="acard-detail"><span>Sources</span><span id="t-fusion-sources">--</span></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
   </main>
 
   <!-- ── Connection modal ─────────────────────────────── -->

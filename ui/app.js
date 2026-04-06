@@ -82,6 +82,11 @@ function handleFrame(data) {
   if (data.analytics) {
     updateAnalytics(data.analytics);
   }
+
+  // Tactical dashboard
+  if (data.tactical) {
+    updateTactical(data.tactical);
+  }
 }
 
 // ── Analytics Dashboard ───────────────────────────────────────────
@@ -93,6 +98,107 @@ if (btnToggleAnalytics) {
     const hidden = analyticsCards.classList.toggle('collapsed');
     btnToggleAnalytics.textContent = hidden ? 'Show' : 'Hide';
   });
+}
+
+// ── Tactical Dashboard ────────────────────────────────────────────
+const tacticalCards = document.getElementById('tactical-cards');
+const btnToggleTactical = document.getElementById('btn-toggle-tactical');
+
+if (btnToggleTactical) {
+  btnToggleTactical.addEventListener('click', () => {
+    const hidden = tacticalCards.classList.toggle('collapsed');
+    btnToggleTactical.textContent = hidden ? 'Show' : 'Hide';
+  });
+}
+
+function updateTactical(t) {
+  // ── Threats ──
+  const tgt = t.targets || {};
+  const threatEl = document.getElementById('t-threat-level');
+  if (threatEl) {
+    const level = tgt.threat_level || 'GREEN';
+    threatEl.textContent = level;
+    threatEl.className = 'acard-big'
+      + (level === 'RED' ? ' acard-big--critical' : '')
+      + (level === 'YELLOW' ? ' acard-big--warning' : '');
+  }
+  setText('t-target-count', tgt.target_count || 0);
+  const targets = tgt.targets || [];
+  setText('t-target-type', targets.length ? targets[0].classification || '--' : '--');
+
+  // ── Concealment ──
+  const conc = t.concealment || {};
+  setText('t-concealed-count', conc.concealed_targets || 0);
+  setText('t-scan-quality', conc.scan_quality || '--');
+
+  // ── Weapon ──
+  const weap = t.weapon || {};
+  const weapEl = document.getElementById('t-weapon-type');
+  if (weapEl) {
+    const wt = weap.weapon_type || 'UNARMED';
+    weapEl.textContent = wt;
+    weapEl.className = 'acard-big'
+      + (wt === 'RIFLE' || wt === 'HEAVY_LOAD' ? ' acard-big--critical' : '')
+      + (wt === 'HANDGUN' ? ' acard-big--warning' : '');
+  }
+  setText('t-weapon-conf', weap.confidence != null ? `${(weap.confidence * 100).toFixed(0)}%` : '--');
+  setText('t-armor', weap.body_armor_likelihood != null ? `${(weap.body_armor_likelihood * 100).toFixed(0)}%` : '--');
+
+  // ── Crowd ──
+  const crowd = t.crowd || {};
+  setText('t-crowd-count', crowd.estimated_count || 0);
+  setText('t-crowd-density', crowd.density_per_m2 != null ? `${crowd.density_per_m2} /m²` : '--');
+  setText('t-density-cat', crowd.density_category || 'SPARSE');
+
+  // ── Tactical Activity ──
+  const tac = t.tactical_activity || {};
+  setText('t-tac-activity', tac.activity || '--');
+  setText('t-tac-conf', tac.confidence != null ? `${(tac.confidence * 100).toFixed(0)}%` : '--');
+
+  // ── Anomalies ──
+  const anom = t.anomalies || {};
+  const assessEl = document.getElementById('t-threat-assess');
+  if (assessEl) {
+    const assess = anom.threat_assessment || 'CLEAR';
+    assessEl.textContent = assess;
+    assessEl.className = 'acard-big'
+      + (assess === 'DANGER' ? ' acard-big--critical' : '')
+      + (assess === 'SUSPICIOUS' ? ' acard-big--warning' : '');
+  }
+  setText('t-anomaly-count', anom.anomalies_found || 0);
+  setText('t-scan-coverage', anom.scan_coverage || '--');
+
+  // ── Intent ──
+  const intent = t.intent || {};
+  const intentEl = document.getElementById('t-intent');
+  if (intentEl) {
+    const il = intent.intent || 'NORMAL';
+    intentEl.textContent = il;
+    intentEl.className = 'acard-big'
+      + (il === 'ATTACK_IMMINENT' ? ' acard-big--critical' : '')
+      + (il === 'ACCESS_WEAPON' || il === 'FLEE' ? ' acard-big--warning' : '');
+  }
+  const intentBar = document.getElementById('t-intent-bar');
+  const intentScore = (intent.attack_probability || 0) * 100;
+  if (intentBar) intentBar.style.width = `${intentScore}%`;
+  setText('t-intent-score', `${intentScore.toFixed(0)}%`);
+
+  // ── Anti-Jam ──
+  const jam = t.anti_jam || {};
+  const jamEl = document.getElementById('t-jam-status');
+  if (jamEl) {
+    const jamStatus = jam.under_attack ? 'UNDER ATTACK' : (jam.status || 'CLEAN');
+    jamEl.textContent = jamStatus;
+    jamEl.className = 'acard-big'
+      + (jam.under_attack ? ' acard-big--critical' : '');
+  }
+  setText('t-jam-threats', jam.threats ? jam.threats.length : 0);
+
+  // ── Fusion COP ──
+  const fus = t.fusion || {};
+  setText('t-fusion-tracks', fus.total_tracks || 0);
+  const sources = fus.active_modalities || [];
+  setText('t-fusion-sources', sources.length ? sources.join(', ') : '--');
 }
 
 function updateAnalytics(a) {
@@ -395,6 +501,23 @@ function demoTick() {
     occupancy: { occupied: true, num_people: 1, method: 'skeleton', confidence: 0.95 },
     emotion:   { stress_level: stressVal < 30 ? 'CALM' : 'MODERATE', stress_score: +stressVal.toFixed(1), hr_elevation_pct: 5.2, rr_elevation_pct: 3.1 },
     health_alerts: { anomalies_detected: false, anomalies: [], alert_level: 'NORMAL' },
+  });
+
+  // Synthetic tactical data for demo
+  const tacActivities = ['STANDING', 'MOVING_TACTICAL', 'TAKING_AIM', 'CRAWLING'];
+  const tacIdx = Math.floor((demoT / 300) % tacActivities.length);
+  const atkProb = 0.05 + 0.1 * Math.abs(Math.sin(demoT * 0.008));
+
+  updateTactical({
+    targets: { threat_level: 'GREEN', target_count: 1, targets: [{ classification: 'HUMAN_WALKING', confidence: 0.82 }] },
+    concealment: { concealed_targets: 0, scan_quality: 'PARTIAL' },
+    weapon: { weapon_type: 'UNARMED', confidence: 0.85, body_armor_likelihood: 0.0, threat_level: 'LOW' },
+    crowd: { estimated_count: 1, density_per_m2: 0.02, density_category: 'SPARSE', confidence: 0.95 },
+    tactical_activity: { activity: tacActivities[tacIdx], confidence: 0.78 },
+    anomalies: { threat_assessment: 'CLEAR', anomalies_found: 0, scan_coverage: 'FULL' },
+    intent: { intent: 'NORMAL', attack_probability: atkProb },
+    anti_jam: { under_attack: false, status: 'CLEAN', threats: [] },
+    fusion: { total_tracks: 1, active_modalities: ['wifi_csi'] },
   });
 }
 

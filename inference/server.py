@@ -46,6 +46,18 @@ from pipeline.occupancy import OccupancyAnalyzer
 from pipeline.emotion import EmotionDetector
 from pipeline.health_alerts import HealthAnomalyDetector
 
+from pipeline.tactical import (
+    TacticalTargetTracker,
+    ConcealmentDetector,
+    WeaponDetectionSystem,
+    CrowdDensityAnalyzer,
+    TacticalActivityClassifier,
+    AnomalyScanner,
+    BehavioralIntentPredictor,
+    AntiJammingDefense,
+    MultiDomainFusion,
+)
+
 from monitoring.metrics import SystemMetrics
 from custom_logger import StructuredLogger
 from security import limiter, verify_api_key, IncomingCSIBundle
@@ -88,6 +100,20 @@ gesture_recognizer = GestureRecognizer()
 occupancy_analyzer = OccupancyAnalyzer()
 emotion_detector = EmotionDetector()
 health_alerter = HealthAnomalyDetector()
+
+# Tactical analytics modules
+tactical_tracker = TacticalTargetTracker()
+concealment_detector = ConcealmentDetector()
+weapon_detector = WeaponDetectionSystem()
+crowd_analyzer = CrowdDensityAnalyzer()
+tactical_activity = TacticalActivityClassifier()
+anomaly_scanner = AnomalyScanner()
+intent_predictor = BehavioralIntentPredictor()
+anti_jam = AntiJammingDefense()
+sensor_fusion = MultiDomainFusion()
+
+# Latest tactical snapshot
+_latest_tactical: dict = {}
 
 # Latest analytics snapshot (updated each inference cycle)
 _latest_analytics: dict = {}
@@ -218,6 +244,53 @@ async def connect_and_process(fusion_pipeline):
                 global _latest_analytics
                 _latest_analytics = analytics
 
+                # ── Tactical Analytics ────────────────────────────
+                for f in bundle.get("frames", []):
+                    amps = np.array(f.get("amplitudes", []), dtype=np.float64)
+                    if amps.size:
+                        tactical_tracker.push(amps)
+                        concealment_detector.push(amps)
+                        crowd_analyzer.push(amps)
+                        anomaly_scanner.push(amps)
+                        anti_jam.push(amps)
+
+                if smoothed_skeletons and len(smoothed_skeletons) > 0:
+                    first_skel = smoothed_skeletons[0]
+                    tactical_activity.push_skeleton(first_skel)
+                    weapon_detector.push(first_skel)
+                    stress_score = (emotion.get("stress_score") or 0) / 100.0
+                    tac_act = tactical_activity.classify().get("activity", "STANDING")
+                    intent_predictor.push(first_skel, stress_score, tac_act)
+
+                    # Feed WiFi detections to sensor fusion
+                    wifi_dets = []
+                    tgt = tactical_tracker.detect()
+                    for t in tgt.get("targets", []):
+                        wifi_dets.append({
+                            "x": t.get("range_m", 5), "y": 0, "z": 0,
+                            "confidence": t.get("confidence", 0.5),
+                            "classification": t.get("classification", "UNKNOWN"),
+                        })
+                    if wifi_dets:
+                        sensor_fusion.ingest("wifi_csi", wifi_dets)
+
+                tactical_data = {
+                    "targets": tactical_tracker.detect(),
+                    "concealment": concealment_detector.scan(),
+                    "weapon": weapon_detector.detect(),
+                    "crowd": crowd_analyzer.estimate(
+                        room_area_m2=50.0,
+                        skeleton_count=len(smoothed_skeletons),
+                    ),
+                    "tactical_activity": tactical_activity.classify(),
+                    "anomalies": anomaly_scanner.scan(),
+                    "intent": intent_predictor.predict(),
+                    "anti_jam": anti_jam.check(),
+                    "fusion": sensor_fusion.get_cop(),
+                }
+                global _latest_tactical
+                _latest_tactical = tactical_data
+
                 # Extract pipeline metrics for logging
                 all_kp_confs = [kp["confidence"] for s in smoothed_skeletons for kp in s]
                 mean_conf = np.mean(all_kp_confs) if all_kp_confs else 0.0
@@ -235,6 +308,7 @@ async def connect_and_process(fusion_pipeline):
                     "num_frames": len(bundle.get("frames", [])),
                     "simulation": estimator.is_simulation,
                     "analytics": analytics,
+                    "tactical": tactical_data,
                 })
 
                 await manager.broadcast(payload)
@@ -290,6 +364,13 @@ async def analytics(request: Request):
     """Return the latest health metrics, activity, and alert snapshot."""
     limiter.check_rate_limit(request.client.host)
     return _latest_analytics or {"status": "no_data"}
+
+
+@app.get("/tactical")
+async def tactical(request: Request):
+    """Return the latest tactical analytics snapshot."""
+    limiter.check_rate_limit(request.client.host)
+    return _latest_tactical or {"status": "no_data"}
 
 
 if __name__ == "__main__":

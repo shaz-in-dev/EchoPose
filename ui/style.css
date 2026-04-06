@@ -370,3 +370,20 @@ body {
 .acard--occupancy{ border-left: 3px solid var(--accent3); }
 .acard--emotion  { border-left: 3px solid #fb923c; }
 .acard--alerts   { border-left: 3px solid var(--danger); }
+
+/* ── Tactical card accents ───────────────────────────── */
+.acard--threat       { border-left: 3px solid #ef4444; }
+.acard--concealment  { border-left: 3px solid #8b5cf6; }
+.acard--weapon       { border-left: 3px solid #f97316; }
+.acard--crowd        { border-left: 3px solid #06b6d4; }
+.acard--tac-activity { border-left: 3px solid #22c55e; }
+.acard--anomaly      { border-left: 3px solid #eab308; }
+.acard--intent       { border-left: 3px solid #ec4899; }
+.acard--antijam      { border-left: 3px solid #14b8a6; }
+.acard--fusion       { border-left: 3px solid #6366f1; }
+
+.tactical-strip { border-top: 1px solid rgba(239,68,68,0.25); }
+
+.intent-bar {
+  background: linear-gradient(90deg, #22c55e, #eab308, #ef4444) !important;
+}
