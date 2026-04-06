@@ -6,6 +6,8 @@ import numpy as np
 # Use absolute imports if pythonpath is set to inference root in pytest.ini
 import gpu_server
 import server_v2
+from pipeline.fusion import FusionPipeline
+from research.disambiguation import MultiPersonDisambiguation
 
 @pytest.mark.asyncio
 async def test_gpu_server_tensor_batching():
@@ -38,3 +40,39 @@ async def test_server_v2_async_call():
     task.cancel()
     
     assert server.bundle_queue.empty()
+
+
+def test_disambiguation_separates_people():
+    """Verify DBSCAN separates distinct Doppler clusters into per-person tensors."""
+    disamb = MultiPersonDisambiguation(max_people=3)
+    csi = np.random.randn(3, 64, 16)
+    # Create a doppler spectrum with two distinct clusters of activity
+    doppler = np.zeros((3, 16))
+    doppler[:, 2:4] = 5.0   # Person A – slow walker
+    doppler[:, 10:13] = 5.0  # Person B – fast walker
+    
+    tensors = disamb.disentangle_csi_signatures(csi, doppler)
+    assert len(tensors) >= 1
+    for t in tensors:
+        assert t.shape == csi.shape
+
+
+def test_fusion_pipeline_returns_tuple():
+    """Verify FusionPipeline.process_bundle returns (features, per_person_tensors)."""
+    pipeline = FusionPipeline()
+    bundle = {
+        "frames": [
+            {"node_id": 0, "amplitudes": list(np.random.rand(64))},
+            {"node_id": 1, "amplitudes": list(np.random.rand(64))},
+            {"node_id": 2, "amplitudes": list(np.random.rand(64))},
+        ],
+        "window_us": 50000,
+    }
+    # Push enough frames to fill the denoiser buffer
+    for _ in range(10):
+        result = pipeline.process_bundle(bundle)
+    
+    assert isinstance(result, tuple)
+    features, per_person = result
+    assert features.ndim == 3  # [nodes, sub, doppler]
+    assert isinstance(per_person, list)

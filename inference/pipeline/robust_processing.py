@@ -114,6 +114,10 @@ class RobustCSIProcessor:
             
         metrics["nlos"] = self.detect_nlos(features)
         
+        # When NLOS is detected, exploit multipath reflections as primary features
+        if metrics["nlos"]:
+            features = self.exploit_multipath(features)
+        
         # Mitigate spectra
         for n in range(features.shape[0]):
             for s in range(features.shape[1]):

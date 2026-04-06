@@ -74,6 +74,19 @@ class PoseNetV2(nn.Module):
             nn.GELU()
         )
         
+    def encoder(self, x: torch.Tensor) -> torch.Tensor:
+        """Extract the 256-dim feature embedding before the pose regression head."""
+        B, N, S, D = x.shape
+        x_flat = x.view(B, N * S, D)
+        feat_3 = self.ext_3(x_flat)
+        feat_5 = self.ext_5(x_flat)
+        feat_7 = self.ext_7(x_flat)
+        fused = torch.cat([feat_3, feat_5, feat_7], dim=1)
+        fused = fused.transpose(1, 2)
+        temporal_out, _ = self.temporal(fused)
+        attn_out, _ = self.spatial_attention(temporal_out, temporal_out, temporal_out)
+        return torch.mean(attn_out, dim=1)  # [B, 256]
+
     def forward(self, x: torch.Tensor):
         # x shape: [B, Nodes, Subcarriers, Doppler]
         B, N, S, D = x.shape

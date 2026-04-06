@@ -8,6 +8,7 @@ import json
 import logging
 import time
 import uuid
+import atexit
 import psutil
 from pathlib import Path
 
@@ -19,6 +20,7 @@ class StructuredLogger:
         
         # We write directly to a JSON Lines file
         self._file = open(self.log_file, "a", encoding="utf-8")
+        atexit.register(self.close)
 
     def log_inference(self, latency_ms: float, mean_confidence: float, anomalies: list, node_status: dict):
         """JSON log with searchable fields"""

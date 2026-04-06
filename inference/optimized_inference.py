@@ -6,7 +6,12 @@ ONNX Quantization, and Apple CoreML fallbacks.
 """
 
 import os
-import onnx
+try:
+    import onnx
+    has_onnx = True
+except ImportError:
+    onnx = None
+    has_onnx = False
 try:
     import onnxruntime as ort
     has_ort = True

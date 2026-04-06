@@ -32,6 +32,34 @@ services:
     depends_on:
       - aggregator
     restart: unless-stopped
+    profiles: ["default", "standard"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:${INFERENCE_WS_PORT:-8765}/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  inference_v2:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./inference:/app
+      - ./.env:/app/.env
+    command: >
+      sh -c "pip install -r requirements.txt -q && gunicorn server_v2:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}"
+    expose:
+      - "${INFERENCE_WS_PORT:-8765}"
+    env_file:
+      - .env
+    depends_on:
+      - aggregator
+    restart: unless-stopped
+    profiles: ["high-throughput"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:${INFERENCE_WS_PORT:-8765}/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   inference_gateway:
     image: nginx:1.27-alpine

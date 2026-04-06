@@ -12,10 +12,12 @@
 static const char *TAG = "csi_capture";
 
 // Called by the Wi-Fi driver on every received 802.11 frame.
-// Runs in Wi-Fi task context — keep it fast, no blocking.
+// NOTE: This runs in the **Wi-Fi task context** (not a hardware ISR),
+// so we use xQueueSend (not xQueueSendFromISR). IRAM_ATTR is kept
+// because ESP-IDF still requires the callback to be in IRAM.
 void IRAM_ATTR csi_capture_callback(void *ctx, wifi_csi_info_t *info)
 {
-    if (!info || !info->buf) return;
+    if (!info || !info->buf || !ctx) return;
 
     QueueHandle_t queue = (QueueHandle_t)ctx;
 
@@ -27,6 +29,10 @@ void IRAM_ATTR csi_capture_callback(void *ctx, wifi_csi_info_t *info)
     // Number of usable subcarriers: LLTF gives 64 int16 I/Q pairs = 128 values
     int16_t *raw    = (int16_t *)info->buf;
     int      count  = info->len / sizeof(int16_t);   // total int16 elements
+
+    // Guard against malformed data: need at least 2 int16 values for 1 I/Q pair
+    if (count < 2) return;
+
     int      usable = (count > CSI_NUM_SUBCARRIERS * 2)
                         ? CSI_NUM_SUBCARRIERS * 2
                         : count;
@@ -34,10 +40,9 @@ void IRAM_ATTR csi_capture_callback(void *ctx, wifi_csi_info_t *info)
     frame.num_subcarriers = (uint16_t)(usable / 2);
     memcpy(frame.iq_data, raw, usable * sizeof(int16_t));
 
-    // Non-blocking push; drop frame if queue full (backpressure)
-    BaseType_t woken = pdFALSE;
-    if (xQueueSendFromISR(queue, &frame, &woken) != pdTRUE) {
+    // Non-blocking push from Wi-Fi task context (not ISR, so use xQueueSend
+    // with 0 tick timeout instead of xQueueSendFromISR)
+    if (xQueueSend(queue, &frame, 0) != pdTRUE) {
         // Queue full — this is expected under high load; drop silently
     }
-    portYIELD_FROM_ISR(woken);
 }

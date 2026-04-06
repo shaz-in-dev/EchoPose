@@ -23,6 +23,7 @@ import asyncio
 import json
 import os
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
@@ -39,6 +40,7 @@ from pipeline.temporal_filter_v2 import TemporalPoseFilterV2
 
 from monitoring.metrics import SystemMetrics
 from custom_logger import StructuredLogger
+from security import limiter, verify_api_key, IncomingCSIBundle
 
 
 # Load central config
@@ -49,7 +51,18 @@ AGGREGATOR_WS  = os.getenv("AGGREGATOR_WS_URI", "ws://localhost:3000/ws")
 INFERENCE_PORT = int(os.getenv("INFERENCE_WS_PORT", "8765"))
 DEVICE         = os.getenv("INFERENCE_DEVICE", "auto")
 
-app = FastAPI(title="RF-Mesh Inference", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app):
+    task = asyncio.create_task(aggregator_loop())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="RF-Mesh Inference", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080,http://127.0.0.1:8000,http://127.0.0.1:8080").split(","),
@@ -127,8 +140,8 @@ async def connect_and_process(fusion_pipeline):
             try:
                 start_time = time.time()
                 bundle = json.loads(raw)
-                features  = fusion_pipeline.process_bundle(bundle)
-                skeletons = estimator.predict(features)
+                features, per_person = fusion_pipeline.process_bundle(bundle)
+                skeletons = estimator.predict(features, per_person_features=per_person)
                 smoothed_skeletons = skeleton_filter.filter(skeletons)
                 
                 # Extract pipeline metrics for logging
@@ -145,6 +158,7 @@ async def connect_and_process(fusion_pipeline):
                     "skeletons": smoothed_skeletons,
                     "amplitudes": amps_dict,
                     "num_frames": len(bundle.get("frames", [])),
+                    "simulation": estimator.is_simulation,
                 })
 
                 await manager.broadcast(payload)
@@ -173,10 +187,6 @@ async def aggregator_loop():
             logger.warning(f"Aggregator WS exhausted all retries! Connection failed: {e}. Rebounding in 10s...")
             await asyncio.sleep(10)
 
-
-@app.on_event("startup")
-async def startup():
-    asyncio.create_task(aggregator_loop())
 
 
 # ── UI WebSocket endpoint ─────────────────────────────────────────

@@ -1,17 +1,21 @@
 """
-inference/research/cross_polarization.py — Signal Fusing (Feature 17)
+inference/research/cross_polarization.py — Polarization Fusion (Feature 17) [RESEARCH]
 
 Combines Horizontal-Horizontal (HH), Horizontal-Vertical (HV), and 
-Vertical-Vertical (VV) polarization states to drastically increase 
-spatial resolution across intersecting targets.
+Vertical-Vertical (VV) polarization states to increase spatial resolution.
+
+HARDWARE NOTE: This requires multi-polarization antennas (e.g., Intel 5300 NIC
+with hardware modifications or custom SDR). The standard ESP32-S3 single-chain
+radio captures only a single polarization state and CANNOT produce the HH/HV/VV
+inputs needed by this module. This is a research prototype for future hardware.
 """
 
 import numpy as np
 
 class CrossPolarizationFusion:
     """
-    NOVEL: First to use HH + HV + VV polarization CSI for multiperson pose.
-    Usually requires hardware modding on Intel 5300 or custom SDRs.
+    Research prototype: HH + HV + VV polarization CSI fusion for multiperson pose.
+    Requires custom multi-polarization hardware not present in the standard ESP32-S3 BOM.
     """
     
     def fuse_polarizations(self, hh: np.ndarray, hv: np.ndarray, vv: np.ndarray) -> np.ndarray:

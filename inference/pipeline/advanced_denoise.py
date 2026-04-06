@@ -105,8 +105,9 @@ class AdvancedDenoiser:
 
     def compute_features(self) -> tuple[np.ndarray, dict]:
         """
-        Fast real-time feature extraction via direct FFT (Doppler PSD).
-        Skips heavy Wiener/Wavelet/STFT stages to maintain 20 Hz throughput.
+        Multi-stage feature extraction via configurable denoising + FFT (Doppler PSD).
+        Applies the stages specified in self.stages (e.g. 'wiener', 'wavelet', 'spectral')
+        before computing the Doppler power spectrum.
         Returns:
             features: [num_nodes, num_sub, FFT_BINS]
             confidence_scores: Dict mapping node -> average feature confidence
@@ -125,8 +126,17 @@ class AdvancedDenoiser:
                     continue
 
                 arr = np.array(data, dtype=np.float32)
-                # Simple mean subtraction (background removal)
+                # Mean subtraction (background removal)
                 arr -= arr.mean()
+
+                # Apply configured denoising stages
+                for stage in self.stages:
+                    if stage == 'wiener':
+                        arr = self._apply_wiener(arr)
+                    elif stage == 'wavelet':
+                        arr = self._apply_wavelet(arr)
+                    elif stage == 'spectral':
+                        arr = self._spectral_subtraction(arr)
 
                 # Direct FFT for Doppler spectrum
                 window = np.hanning(len(arr))

@@ -1,6 +1,6 @@
 # EchoPose Architecture
 
-EchoPose V3 represents the absolute pinnacle of zero-vision human tracking. We have completely decoupled the stack into a high-performance Rust hardware layer and an asynchronously scaled Python/ONNX inference layer.
+EchoPose V2 is a full-stack WiFi CSI pose estimation system, decoupled into a high-performance Rust aggregation layer and a Python/ONNX inference layer.
 
 ## The Tri-Node Geometry
 The system requires exactly 3 ESP32-S3 devices running custom native C firmware. 
@@ -19,8 +19,12 @@ These form a uniform bounding box around the target room.
 6. **Presentation Layer (JS/Three.js):** 60FPS fluid rendering mapped to browser WebSockets.
 
 ## Scaling Limits
-- Maximum Concurrent Persons tracked: 3 (Hardcoded limit for real-time physics constraints)
-- Subcarrier Depth: Up to 1024 (Current ESP32 limit is 64 per antenna)
+- Maximum Concurrent Persons tracked: 3 (via DBSCAN disambiguation + multi-head regression)
+- Subcarrier Depth: 64 per antenna (ESP32-S3 hardware limit)
 - Refresh Rate: Max 20Hz 
+
+## Research Modules
+Several experimental modules exist under `inference/research/` for future development.
+These are **not** integrated into the live pipeline — see `SIGNAL_PROCESSING.md` for details.
 
 To dive deeper into the mathematics behind the pipeline, read `SIGNAL_PROCESSING.md`.

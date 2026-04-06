@@ -38,11 +38,18 @@ class DistributedInference:
         return out
         
     async def _infer_batch(self, batch_tensor: torch.Tensor):
-        with torch.no_grad():
-            if self.has_gpus:
-                batch_tensor = batch_tensor.cuda(non_blocking=True)
-            poses = self.pose_net(batch_tensor)
-            return poses.cpu().numpy()
+        loop = asyncio.get_event_loop()
+
+        def _forward():
+            with torch.no_grad():
+                if self.has_gpus:
+                    batch_tensor_dev = batch_tensor.cuda(non_blocking=True)
+                else:
+                    batch_tensor_dev = batch_tensor
+                poses = self.pose_net(batch_tensor_dev)
+                return poses.cpu().numpy()
+
+        return await loop.run_in_executor(None, _forward)
 
     async def batch_inference(self, feature_bundles: list):
         """Process multiple UI clients concurrently across GPUs"""

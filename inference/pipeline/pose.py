@@ -32,6 +32,8 @@ try:
 except ImportError:
     has_ort = False
 
+from optimized_inference import OptimizedInference
+
 EXPECTED_NODES  = int(os.getenv("EXPECTED_NODES", "3"))
 NUM_KEYPOINTS   = 17
 MAX_PEOPLE      = 3  # Multi-person support
@@ -49,10 +51,23 @@ class PoseEstimator:
 
     def __init__(self):
         self.use_onnx = False
+        self.use_optimized = False
         self.onnx_sess = None
+        self.optimized = None
         self.model = None
         
-        # 1. Try ONNX First (Massive Speedup)
+        # 0. Try OptimizedInference first (TensorRT / CoreML / INT8 Quantized)
+        try:
+            opt = OptimizedInference()
+            if opt.session is not None:
+                self.optimized = opt
+                self.use_optimized = True
+                print(f"[pose] Using OptimizedInference backend: {opt.backend}")
+                return
+        except Exception as e:
+            print(f"[pose] OptimizedInference unavailable: {e}")
+        
+        # 1. Try ONNX (standard providers)
         if ONNX_CKPT.exists() and has_ort:
             expected_hash = os.getenv("EXPECTED_ONNX_HASH")
             if expected_hash:
@@ -100,10 +115,11 @@ class PoseEstimator:
         self.sim_tick = 0
 
     @torch.no_grad()
-    def predict(self, features: np.ndarray) -> List[List[Dict]]:
+    def predict(self, features: np.ndarray, per_person_features: list = None) -> List[List[Dict]]:
         """
         Args:
             features: ndarray [nodes, subcarriers, doppler_bins]
+            per_person_features: optional list of per-person feature tensors from disambiguation
         Returns:
             list of people, each containing 17 keypoints: [[{x, y, z, conf}, ...], ...]
         """
@@ -140,7 +156,15 @@ class PoseEstimator:
         # Batch dimension setup
         x_np = np.expand_dims(features.astype(np.float32), axis=0) # [1, N, S, D]
 
-        if self.use_onnx:
+        if self.use_optimized:
+            raw = self.optimized.infer(x_np)
+            if raw is not None:
+                raw = raw.squeeze(0)  # [MAX_PEOPLE, 17, 4]
+            else:
+                # Fall through to PyTorch if optimized returns None
+                x = torch.tensor(x_np).to(self.device)
+                raw = self.model(x).squeeze(0).cpu().numpy()
+        elif self.use_onnx:
             input_name = self.onnx_sess.get_inputs()[0].name
             raw = self.onnx_sess.run(None, {input_name: x_np})[0]
             raw = raw.squeeze(0)  # [MAX_PEOPLE, 17, 4]

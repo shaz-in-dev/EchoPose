@@ -1,4 +1,5 @@
 import torch
+import hashlib
 from pathlib import Path
 
 import sys
@@ -9,19 +10,17 @@ def export_to_onnx():
     models_dir = Path(__file__).parent.parent / "models"
     pt_path = models_dir / "pose_net.pt"
     onnx_path = models_dir / "pose_net.onnx"
+    models_dir.mkdir(exist_ok=True)
 
-    if not pt_path.exists():
-        print(f"❌ Cannot find PyTorch model at {pt_path}")
-        print("Please run scripts/download_weights.py first.")
-        return
-
-    print("Loading PyTorch model...")
     model = PoseNet()
-    model.load_state_dict(torch.load(pt_path, map_location="cpu"))
+    if pt_path.exists():
+        model.load_state_dict(torch.load(pt_path, map_location="cpu"))
+        print(f"Loaded PyTorch checkpoint from {pt_path}")
+    else:
+        print(f"No checkpoint at {pt_path}; exporting with random weights (for testing only).")
+
     model.eval()
 
-    # Create dummy input based on our FEATURE_SHAPE (B, N, S, D)
-    # B=1 (batch size), N=3 (nodes), S=64 (subcarriers), D=16 (doppler_bins)
     nodes, subcarriers, doppler_bins = FEATURE_SHAPE
     dummy_input = torch.randn(1, nodes, subcarriers, doppler_bins)
 
@@ -29,15 +28,19 @@ def export_to_onnx():
     torch.onnx.export(
         model,
         dummy_input,
-        onnx_path,
+        str(onnx_path),
         export_params=True,
-        opset_version=14,
+        opset_version=17,
         do_constant_folding=True,
         input_names=["csi_features"],
         output_names=["keypoints"],
         dynamic_axes={"csi_features": {0: "batch_size"}, "keypoints": {0: "batch_size"}}
     )
-    print("✅ Successfully exported PoseNet to ONNX format!")
+
+    sha = hashlib.sha256(onnx_path.read_bytes()).hexdigest()
+    print(f"Successfully exported PoseNet to ONNX format!")
+    print(f"SHA-256: {sha}")
+    print(f"Set EXPECTED_ONNX_HASH={sha} in .env for integrity verification.")
 
 if __name__ == "__main__":
     export_to_onnx()

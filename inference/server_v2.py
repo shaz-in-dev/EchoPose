@@ -13,10 +13,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+import websockets
+from websockets.exceptions import WebSocketException
 from pipeline.fusion import FusionPipeline
 from gpu_server import DistributedInference
+from security import limiter, verify_api_key
 
 logger = logging.getLogger("rf_inference.async_server")
+
+AGGREGATOR_WS = os.getenv("AGGREGATOR_WS_URI", "ws://localhost:3000/ws")
 
 class HighThroughputServer:
     """Manages concurrent UI clients and non-blocking inference decoupling"""
@@ -53,7 +59,7 @@ class HighThroughputServer:
             bundle = await self.bundle_queue.get()
             
             # 1. Feature fusion (Fast, runs in-loop)
-            features = self.fusion.process_bundle(bundle)
+            features, per_person = self.fusion.process_bundle(bundle)
             
             # 2. ML Inference (Slow, dispatch to ThreadPoolExecutor so UI doesn't freeze)
             skeletons = await self.model.batch_inference([features])
@@ -83,17 +89,42 @@ class HighThroughputServer:
             await asyncio.sleep(10)
             await ws.send_json({"ping": "health_check"})
 
+    @retry(
+        wait=wait_exponential(multiplier=1, max=30),
+        stop=stop_after_attempt(10),
+        retry=retry_if_exception_type((ConnectionRefusedError, OSError, WebSocketException)),
+    )
+    async def _aggregator_ws_feed(self):
+        """Connect to the Rust aggregator WebSocket and feed bundles into the queue."""
+        async with websockets.connect(AGGREGATOR_WS, ping_interval=20, ping_timeout=10) as conn:
+            logger.info(f"Connected to aggregator at {AGGREGATOR_WS}")
+            async for raw in conn:
+                bundle = json.loads(raw)
+                if not self.bundle_queue.full():
+                    await self.bundle_queue.put(bundle)
+
+    async def aggregator_loop(self):
+        """Maintain infinite resilience beyond individual retries."""
+        while True:
+            try:
+                await self._aggregator_ws_feed()
+            except Exception as e:
+                logger.warning(f"Aggregator WS exhausted all retries: {e}. Rebounding in 10s...")
+                await asyncio.sleep(10)
+
 server = HighThroughputServer()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Spin up the background worker and stop it cleanly during shutdown.
+    # Spin up background workers and stop them cleanly during shutdown.
     worker = asyncio.create_task(server._infer_continuously())
+    agg_task = asyncio.create_task(server.aggregator_loop())
     try:
         yield
     finally:
         worker.cancel()
-        await asyncio.gather(worker, return_exceptions=True)
+        agg_task.cancel()
+        await asyncio.gather(worker, agg_task, return_exceptions=True)
 
 
 app = FastAPI(title="EchoPose V2 High-Throughput Server", lifespan=lifespan)
@@ -115,6 +146,14 @@ async def ingest_bundle(bundle: dict):
     if not server.bundle_queue.full():
         await server.bundle_queue.put(bundle)
     return {"status": "queued"}
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "ui_clients": len(server.clients),
+        "queue_depth": server.bundle_queue.qsize(),
+    }
 
 if __name__ == "__main__":
     import uvicorn

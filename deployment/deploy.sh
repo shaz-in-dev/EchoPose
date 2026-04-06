@@ -1,8 +1,22 @@
 #!/bin/bash
 # deployment/deploy.sh — One-Click Automated Deployment (Feature 13)
 # Auto-detects hardware and dynamically optimizes the EchoPose pipeline
+#
+# Usage:
+#   ./deploy.sh             # Standard server (server.py)
+#   ./deploy.sh --v2        # High-throughput async server (server_v2.py)
 
-echo "Booting EchoPose Ultimate Production Stack..."
+echo "Booting EchoPose Production Stack..."
+
+# Parse flags
+COMPOSE_PROFILES="default"
+if [ "$1" = "--v2" ]; then
+    COMPOSE_PROFILES="high-throughput"
+    echo "Using HIGH-THROUGHPUT server (server_v2.py)"
+else
+    echo "Using STANDARD server (server.py)"
+fi
+export COMPOSE_PROFILES
 
 # 1. Auto-detect Hardware
 GPU_COUNT=$(nvidia-smi --list-gpus | wc -l 2>/dev/null || echo 0)

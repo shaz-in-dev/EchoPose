@@ -68,6 +68,7 @@ body {
 }
 .badge--disconnected { background: rgba(248,113,113,.15); color: var(--danger); border: 1px solid rgba(248,113,113,.3); }
 .badge--connected    { background: rgba(52,211,153,.15);  color: var(--accent3); border: 1px solid rgba(52,211,153,.3); }
+.badge--sim          { background: rgba(251,191,36,.15);  color: #fbbf24;       border: 1px solid rgba(251,191,36,.3); }
 
 .stat-pill {
   background: var(--surface2);

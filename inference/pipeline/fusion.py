@@ -6,9 +6,10 @@ amplitude data from all nodes into a single [nodes, subcarriers, ...]
 matrix ready for the denoiser.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 from pipeline.advanced_denoise import AdvancedDenoiser
 from pipeline.robust_processing import RobustCSIProcessor
+from research.disambiguation import MultiPersonDisambiguation
 import os
 import numpy as np
 
@@ -23,6 +24,7 @@ class FusionPipeline:
             stages=['wiener', 'wavelet', 'spectral']
         )
         self.robustness = RobustCSIProcessor(expected_nodes=EXPECTED_NODES)
+        self.disambiguator = MultiPersonDisambiguation(max_people=3)
 
     def process_bundle(self, bundle: Dict[str, Any]) -> np.ndarray:
         """
@@ -37,10 +39,17 @@ class FusionPipeline:
             if node_id not in active_nodes:
                 active_nodes.append(node_id)
 
-        # 1. World-class multi-stage denoising
+        # 1. Multi-stage denoising (Wiener, Wavelet, Spectral Subtraction)
         features, confidence = self.denoiser.compute_features()
         
         # 2. Adversarial hardening (NLOS, Interference, Failures)
         hardened_features, metrics = self.robustness.process_bundle(features, active_nodes)
         
-        return hardened_features
+        # 3. Multi-person disambiguation via DBSCAN clustering
+        # Extract mean Doppler spectrum across subcarriers for clustering
+        doppler_spectrum = np.mean(hardened_features, axis=1)  # [nodes, doppler_bins]
+        per_person_tensors = self.disambiguator.disentangle_csi_signatures(
+            hardened_features, doppler_spectrum
+        )
+        
+        return hardened_features, per_person_tensors

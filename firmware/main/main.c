@@ -129,6 +129,7 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     // Create inter-task CSI queue (holds up to 64 frames)
+    // MUST happen before wifi_init() because the CSI callback receives the queue handle.
     csi_queue = xQueueCreate(64, sizeof(csi_frame_t));
     configASSERT(csi_queue != NULL);
 

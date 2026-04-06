@@ -9,8 +9,18 @@
 use std::collections::{HashMap, HashSet};
 use crate::types::{CsiFrame, SyncedBundle};
 
-pub const WINDOW_US:      u64 = 50_000;   // 50 ms windows  → 20 Hz
-pub const STALE_LIMIT_US: u64 = 50_000;   // flush after one window period — drives steady 20 Hz output
+fn read_window_us() -> u64 {
+    std::env::var("AGGREGATOR_SYNC_WINDOW_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(50)
+        * 1_000 // convert ms → µs
+}
+
+lazy_static::lazy_static! {
+    pub static ref WINDOW_US: u64 = read_window_us();
+    pub static ref STALE_LIMIT_US: u64 = *WINDOW_US; // flush after one window period
+}
 
 struct Window {
     start_us: u64,
@@ -36,7 +46,7 @@ impl NodeSynchronizer {
 
     /// Feed a decoded frame; returns a SyncedBundle if the window is complete.
     pub fn push(&mut self, frame: CsiFrame) -> Option<SyncedBundle> {
-        let slot = (frame.timestamp_us / WINDOW_US) * WINDOW_US;
+        let slot = (frame.timestamp_us / *WINDOW_US) * *WINDOW_US;
 
         // Keep a running "clock" from the newest timestamp we've ever seen
         if frame.timestamp_us > self.newest_ts_us {
@@ -67,7 +77,7 @@ impl NodeSynchronizer {
             .windows
             .keys()
             .copied()
-            .filter(|&k| self.newest_ts_us.saturating_sub(k) > STALE_LIMIT_US)
+            .filter(|&k| self.newest_ts_us.saturating_sub(k) > *STALE_LIMIT_US)
             .collect();
 
         for k in stale_keys {

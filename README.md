@@ -4,13 +4,15 @@ An advanced, full-stack Wi-Fi sensing system that treats radio waves like invisi
 
 ## V2 Features
 
-EchoPose V2 is a hardened, production-ready system featuring:
-- **Lightning-Fast ONNX Inference:** Heavily optimized CPU/Edge execution using `onnxruntime`.
+EchoPose V2 is an architecture showcase and development platform featuring:
+- **ONNX Inference Path:** CPU/Edge execution via `onnxruntime` (requires a trained model; ships in simulation mode by default — see *Simulation Mode* below).
 - **Buttery-Smooth Tracking:** Temporal Exponential Moving Average (EMA) filters eliminate signal jitter.
 - **Dynamic Node Discovery:** The Rust aggregator automatically detects and registers ESP32 nodes as they power on.
 - **Room Environment Calibration:** A built-in `/calibrate` engine learns the room's static noise floor (walls, furniture) and subtracts it from live traffic.
 - **Over-The-Air (OTA) Updates:** Flash ESP32 firmware directly over the Wi-Fi mesh.
 - **Session Recording:** Save tracking data to local JSON files and replay them in the 3D dashboard.
+
+> **Simulation Mode:** No pre-trained weights are provided. When no checkpoint is found in `inference/models/`, the system generates a synthetic animated skeleton so you can verify the full pipeline end-to-end. Run `inference/scripts/download_weights.py` to generate an untrained mock checkpoint for development.
 
 ---
 

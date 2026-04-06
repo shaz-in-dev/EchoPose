@@ -1,4 +1,4 @@
-# EchoPose V3 Flashing Guide (Waveshare ESP32-S3 Nano)
+# EchoPose V2 Flashing Guide (Waveshare ESP32-S3 Nano)
 
 Follow these steps to flash your two ESP32-S3 Nano boards and begin live testing.
 

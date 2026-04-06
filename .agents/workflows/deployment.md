@@ -1,8 +1,8 @@
 ---
-description: How to Deploy the EchoPose Enterprise V3 Stack
+description: How to Deploy the EchoPose V2 Stack
 ---
 
-# EchoPose Enterprise V3 Deployment Guide
+# EchoPose V2 Deployment Guide
 
 This workflow provisions the high-throughput Rust Aggregator, the PyTorch/TensorRT inference engine, and the React UI dashboard.
 

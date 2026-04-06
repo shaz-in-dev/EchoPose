@@ -56,6 +56,12 @@ function tick() {
 function handleFrame(data) {
   if (typeof recordFrame === 'function') recordFrame(data);
   tick();
+
+  // Show simulation mode indicator
+  if (data.simulation) {
+    statusBadge.textContent = 'Sim';
+    statusBadge.className   = 'badge badge--sim';
+  }
   
   // V3 format (Array of skeletons)
   if (data.skeletons) {

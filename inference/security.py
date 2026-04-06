@@ -11,7 +11,7 @@ from typing import Callable
 import time
 import os
 import json
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, model_validator
 import logging
 from cryptography.fernet import Fernet
 
@@ -66,7 +66,8 @@ class IncomingCSIBundle(BaseModel):
     window_us: int
     frames: list
     
-    @root_validator
+    @model_validator(mode="before")
+    @classmethod
     def validate_physics(cls, values):
         frames = values.get('frames')
         if not frames:
