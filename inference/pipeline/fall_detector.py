@@ -32,6 +32,9 @@ class FallDetector:
         self._alert_cooldown: float = 5.0  # seconds between alerts
 
     def push_skeleton(self, skeleton: List[Dict]) -> None:
+        if len(skeleton) < 17:
+            logger.warning("Skeleton has %d keypoints, expected 17 — skipping.", len(skeleton))
+            return
         arr = np.array([[kp.get("x", 0), kp.get("y", 0), kp.get("z", 0)] for kp in skeleton])
         self._pose_history.append(arr)
         if len(self._pose_history) > self._max_history:

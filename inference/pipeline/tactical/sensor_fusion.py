@@ -14,6 +14,7 @@ External feeds are ingested as standardised dicts.
 
 import time
 import uuid
+import threading
 import numpy as np
 from typing import Dict, List, Optional
 import logging
@@ -71,6 +72,7 @@ class MultiDomainFusion:
     def __init__(self, association_dist: float = _ASSOCIATION_DIST):
         self._assoc_dist = association_dist
         self._tracks: Dict[str, _Track] = {}
+        self._lock = threading.Lock()
 
     def ingest(self, modality: str, detections: List[Dict]) -> None:
         """
@@ -86,18 +88,22 @@ class MultiDomainFusion:
         for det in detections:
             pos = np.array([det.get("x", 0), det.get("y", 0), det.get("z", 0)],
                            dtype=np.float64)
+            if not np.all(np.isfinite(pos)):
+                continue
             conf = float(det.get("confidence", 0.5)) * weight
 
-            matched = self._associate(pos)
-            if matched:
-                self._update_track(matched, pos, conf, modality, det)
-            else:
-                self._create_track(pos, conf, modality, det)
+            with self._lock:
+                matched = self._associate(pos)
+                if matched:
+                    self._update_track(matched, pos, conf, modality, det)
+                else:
+                    self._create_track(pos, conf, modality, det)
 
     def get_cop(self) -> Dict:
         """Return the current Common Operating Picture."""
-        self._prune_stale()
-        tracks = [t.to_dict() for t in self._tracks.values()]
+        with self._lock:
+            self._prune_stale()
+            tracks = [t.to_dict() for t in self._tracks.values()]
         tracks.sort(key=lambda t: t["confidence"], reverse=True)
 
         return {
@@ -115,8 +121,9 @@ class MultiDomainFusion:
 
     @property
     def track_count(self) -> int:
-        self._prune_stale()
-        return len(self._tracks)
+        with self._lock:
+            self._prune_stale()
+            return len(self._tracks)
 
     # ── helpers ───────────────────────────────────────────────────
 

@@ -15,13 +15,17 @@ class RealTimeDomainAdaptation:
     """
     def __init__(self, feature_dim=256):
         self.feature_dim = feature_dim
+        self._optimizer = None
+        self._optimizer_model_id = None
         
     def compute_mmd_loss(self, source_features: torch.Tensor, target_features: torch.Tensor):
         """
         Maximum Mean Discrepancy (MMD) calculates the distance between two distributions.
-        By minimizing this loss during online fine-tuning, the neural network learns to 
-        extract "room-invariant" human signatures instead of overfitting to wall reflections.
         """
+        if source_features.shape != target_features.shape:
+            raise ValueError(
+                f"Feature shape mismatch: source {source_features.shape} vs target {target_features.shape}"
+            )
         # Linear MMD for high-speed online computation
         delta = source_features.mean(0) - target_features.mean(0)
         loss = delta.dot(delta)
@@ -33,7 +37,11 @@ class RealTimeDomainAdaptation:
         WARNING: Highly experimental. This updates model weights in production!
         """
         model.train()
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+        # Re-use optimizer across calls; recreate only if the model changes
+        model_id = id(model)
+        if self._optimizer is None or self._optimizer_model_id != model_id:
+            self._optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+            self._optimizer_model_id = model_id
         
         # Extract features (assume model has an encoder property as built in V2)
         target_features = model.encoder(new_environment_stream)
@@ -41,9 +49,9 @@ class RealTimeDomainAdaptation:
         # MMD Loss forces the new features to match the distribution of the original training lab
         loss = self.compute_mmd_loss(source_anchors, target_features)
         
-        optimizer.zero_grad()
+        self._optimizer.zero_grad()
         loss.backward()
-        optimizer.step()
+        self._optimizer.step()
         
         model.eval()
         return loss.item()

@@ -19,10 +19,10 @@ class FrequencyDomainTransferLearning:
     def normalize_to_frequency_invariant_space(self, csi_amplitudes: np.ndarray, target_frequency_hz: float):
         """
         Transforms CSI to frequency-independent representation.
-        Since Doppler shift (Hz) varies based on the carrier frequency for the SAME 
-        human walking speed, we must normalize the frequency shifts into 
-        carrier-agnostic Velocity (m/s) shifts.
         """
+        if target_frequency_hz <= 0:
+            raise ValueError(f"target_frequency_hz must be positive, got {target_frequency_hz}")
+
         c = 3e8 # Speed of light m/s
         
         # The lambda (wavelength) changes drastically between 2.4Ghz and 5Ghz
@@ -41,18 +41,29 @@ class FrequencyDomainTransferLearning:
         
         # Scale the x-axis (frequency bins)
         mapped_x = original_x * scale_factor
+
+        # np.interp requires xp to be monotonically increasing
+        if scale_factor < 0:
+            raise ValueError(f"Negative scale factor: {scale_factor}")
+        if mapped_x[-1] < mapped_x[0]:
+            mapped_x = mapped_x[::-1]
+            flip = True
+        else:
+            flip = False
         
         # Interpolate the amplitudes onto the new physical axis
         invariant_csi = np.zeros_like(csi_amplitudes)
         
         # In this implementation, assuming csi_amplitudes is 1D or the last axis is frequency bins
         if csi_amplitudes.ndim == 1:
-            invariant_csi = np.interp(original_x, mapped_x, csi_amplitudes, left=0.0, right=0.0)
+            src = csi_amplitudes[::-1] if flip else csi_amplitudes
+            invariant_csi = np.interp(original_x, mapped_x, src, left=0.0, right=0.0)
         else:
             # Apply along the last axis
             for idx in np.ndindex(csi_amplitudes.shape[:-1]):
+                src = csi_amplitudes[idx][::-1] if flip else csi_amplitudes[idx]
                 invariant_csi[idx] = np.interp(
-                    original_x, mapped_x, csi_amplitudes[idx], left=0.0, right=0.0
+                    original_x, mapped_x, src, left=0.0, right=0.0
                 )
                 
         return invariant_csi

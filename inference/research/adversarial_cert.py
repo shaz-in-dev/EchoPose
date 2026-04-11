@@ -38,6 +38,13 @@ class AdversarialRobustnessCertification:
                 preds.append(pred_pose)
                 
         # Calculate the variance of predictions under gaussian noise
+        if not preds:
+            return {
+                "is_safe": False,
+                "certified_radius": 0.0,
+                "prediction_variance": float("inf"),
+                "mean_pose_tensor": None,
+            }
         stacked_preds = torch.stack(preds) # [N, 1, MAX_PEOPLE, 17, 3]
         mean_prediction = stacked_preds.mean(dim=0)
         variance = stacked_preds.std(dim=0).mean().item()
@@ -45,6 +52,8 @@ class AdversarialRobustnessCertification:
         # If variance is low, the model is highly robust.
         # Certified radius R is derived from the inverse gaussian CDF (simplified here)
         certified_radius = max(0.0, self.noise_std * (3.0 - variance) / 3.0)
+        # Cap to a physically reasonable bound
+        certified_radius = min(certified_radius, self.noise_std * 5.0)
         
         is_safe = certified_radius > (self.noise_std * 0.5)
         

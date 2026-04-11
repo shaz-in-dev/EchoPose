@@ -36,8 +36,8 @@ class TemporalPoseFilterV2:
                 continue
                 
             # Convert incoming list of dicts to flat numpy arrays for fast math
-            measured_coords = np.array([[kp["x"], kp["y"], kp["z"]] for kp in person], dtype=float)
-            measured_confs  = np.array([kp["confidence"] for kp in person], dtype=float)
+            measured_coords = np.array([[kp.get("x", 0), kp.get("y", 0), kp.get("z", 0)] for kp in person], dtype=float)
+            measured_confs  = np.array([kp.get("confidence", 0) for kp in person], dtype=float)
             
             # Initialize State First Frame
             if self.states[p_idx] is None:
@@ -62,8 +62,10 @@ class TemporalPoseFilterV2:
             # High confidence -> Trust measurement
             # Low confidence  -> Trust physics momentum
             # Using sigmoid activation smoothed by measurement confidence
-            mean_conf = np.mean(measured_confs)
+            mean_conf = float(np.clip(np.mean(measured_confs), 0.0, 1.0))
             gain = 1.0 / (1.0 + np.exp(-10.0 * (mean_conf - 0.5))) # Scales smoothly [0,1]
+            if not np.isfinite(gain):
+                gain = 0.5
             gain_matrix = gain * measured_confs[:, np.newaxis] # Apply individual joint confidence weight
             
             # 4. Update the actual position state

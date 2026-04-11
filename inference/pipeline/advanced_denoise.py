@@ -138,6 +138,10 @@ class AdvancedDenoiser:
                     elif stage == 'spectral':
                         arr = self._spectral_subtraction(arr)
 
+                # Guard against NaN/Inf from denoising stages
+                if not np.all(np.isfinite(arr)):
+                    arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+
                 # Direct FFT for Doppler spectrum
                 window = np.hanning(len(arr))
                 spectrum = np.abs(np.fft.rfft(arr * window)) ** 2

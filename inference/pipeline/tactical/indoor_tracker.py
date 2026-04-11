@@ -127,7 +127,9 @@ class IndoorTracker:
         try:
             pos, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
         except np.linalg.LinAlgError:
-            pos = np.zeros(3)
+            logger.warning("Trilateration failed; using centroid of known nodes.")
+            known = [self._node_positions[i] for i in ids if i in self._node_positions]
+            pos = np.mean(known, axis=0) if known else np.zeros(3)
         return pos
 
     def _smooth(self, pos: np.ndarray) -> np.ndarray:

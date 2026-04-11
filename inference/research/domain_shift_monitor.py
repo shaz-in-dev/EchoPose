@@ -38,10 +38,17 @@ class AutomaticDomainShiftDetection:
                 # model must be in eval mode
                 pose = model(csi_input) # [1, MAX_PEOPLE, 17, 3]
                 preds.append(pose)
-                
+
+        if len(preds) < 2:
+            return False
+
         # Stack predictions
         # Shape: [Num_Models, 1, MAX_PEOPLE, 17, 3]
-        stacked = torch.stack(preds)
+        try:
+            stacked = torch.stack(preds)
+        except RuntimeError:
+            logger.warning("Ensemble prediction shapes are inconsistent; skipping shift check.")
+            return False
         
         # Calculate cross-model variance (Disagreement)
         # Average variance across joints/people

@@ -39,6 +39,9 @@ class TacticalActivityClassifier:
         self._max = int(fps * 5)
 
     def push_skeleton(self, skeleton: List[Dict]) -> None:
+        if len(skeleton) < 17:
+            logger.warning("Skeleton has %d keypoints, expected 17 — skipping.", len(skeleton))
+            return
         arr = np.array([[kp.get("x", 0), kp.get("y", 0), kp.get("z", 0)]
                         for kp in skeleton], dtype=np.float64)
         self._buf.append(arr)
@@ -107,7 +110,8 @@ class TacticalActivityClassifier:
         # Throwing: rapid upward wrist velocity
         if len(history) >= 5:
             recent_wrists = history[-5:, _R_WRIST, 1]
-            throw_vel = float(np.min(np.diff(recent_wrists)) * self.fps)
+            diffs = np.diff(recent_wrists)
+            throw_vel = float(np.min(diffs) * self.fps) if len(diffs) > 0 else 0.0
         else:
             throw_vel = 0.0
 

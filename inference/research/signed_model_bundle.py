@@ -88,7 +88,8 @@ def verify_signed_bundle(container: bytes, public_key: Ed25519PublicKey) -> Tupl
 
     try:
         public_key.verify(bytes.fromhex(sig.get("signature_hex", "")), model_bytes)
-    except Exception:
-        return False, "signature verification failed"
+    except (ValueError, Exception) as exc:
+        # ValueError: malformed hex; cryptography.exceptions.InvalidSignature: bad sig
+        return False, f"signature verification failed: {exc}"
 
     return True, "bundle verification passed"

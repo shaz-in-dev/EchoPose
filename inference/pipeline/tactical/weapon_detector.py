@@ -36,6 +36,9 @@ class WeaponDetectionSystem:
 
     def push(self, skeleton: List[Dict],
              csi_amplitudes: Optional[np.ndarray] = None) -> None:
+        if len(skeleton) < 17:
+            logger.warning("Skeleton has %d keypoints, expected 17 — skipping.", len(skeleton))
+            return
         arr = np.array([[kp.get("x", 0), kp.get("y", 0), kp.get("z", 0)]
                         for kp in skeleton], dtype=np.float64)
         self._skel_buf.append(arr)

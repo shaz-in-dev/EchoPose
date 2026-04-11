@@ -111,6 +111,10 @@ class RobustCSIProcessor:
         
         if features.size == 0:
             return features, metrics
+
+        # Sanitize NaN/Inf before processing
+        if not np.all(np.isfinite(features)):
+            features = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)
             
         metrics["nlos"] = self.detect_nlos(features)
         

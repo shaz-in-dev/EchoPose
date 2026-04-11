@@ -96,7 +96,12 @@ class CrowdDensityAnalyzer:
         if not np.any(mask):
             return 0
         p = psd[mask]
-        peaks, props = find_peaks(p, height=np.max(p) * 0.15, distance=3)
+        if len(p) == 0 or not np.all(np.isfinite(p)):
+            return 0
+        max_p = np.max(p)
+        if max_p < 1e-12:
+            return 0
+        peaks, props = find_peaks(p, height=max_p * 0.15, distance=3)
         return len(peaks)
 
     def _variance_crowd_model(self, h: np.ndarray, area: float) -> int:

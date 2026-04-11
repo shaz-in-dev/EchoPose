@@ -101,7 +101,10 @@ class TacticalTargetTracker:
         if not np.any(mask):
             return 1
         p = psd[mask]
-        peaks, _ = find_peaks(p, height=np.max(p) * 0.3, distance=3)
+        max_p = np.max(p)
+        if max_p < 1e-12:
+            return 1
+        peaks, _ = find_peaks(p, height=max_p * 0.3, distance=3)
         return max(1, len(peaks))
 
     def _classify(self, cadence: float, asym: float,

@@ -28,6 +28,9 @@ class GestureRecognizer:
         self._max_history = int(fps * 3)
 
     def push_skeleton(self, skeleton: List[Dict]) -> None:
+        if len(skeleton) < 11:
+            logger.warning("Skeleton has %d keypoints, need ≥11 — skipping.", len(skeleton))
+            return
         kps = np.array([[kp.get("x", 0), kp.get("y", 0), kp.get("z", 0)] for kp in skeleton])
         self._wrist_history_l.append(kps[_L_WRIST])
         self._wrist_history_r.append(kps[_R_WRIST])

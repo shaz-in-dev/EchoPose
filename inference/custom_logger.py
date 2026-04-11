@@ -6,18 +6,23 @@ Creates searchable logs suitable for ElasticSearch / Logstash / Kibana.
 
 import json
 import logging
+import threading
 import time
 import uuid
 import atexit
 import psutil
 from pathlib import Path
 
+logger = logging.getLogger("rf_inference.structured_logger")
+
+
 class StructuredLogger:
     def __init__(self, log_dir="logs"):
         self.log_dir = Path(__file__).resolve().parent.parent / log_dir
         self.log_dir.mkdir(exist_ok=True)
         self.log_file = self.log_dir / "structured_inference.jsonl"
-        
+        self._lock = threading.Lock()
+
         # We write directly to a JSON Lines file
         self._file = open(self.log_file, "a", encoding="utf-8")
         atexit.register(self.close)
@@ -44,9 +49,8 @@ class StructuredLogger:
             'memory_mb': memory_mb
         }
         
-        self._file.write(json.dumps(log_entry) + "\n")
-        self._file.flush()
-        
+        self._write(log_entry)
+
     def log_error(self, message: str, exception: str = ""):
         log_entry = {
             'timestamp': time.time(),
@@ -55,9 +59,20 @@ class StructuredLogger:
             'message': message,
             'exception': exception
         }
-        self._file.write(json.dumps(log_entry) + "\n")
-        self._file.flush()
+        self._write(log_entry)
+
+    def _write(self, entry: dict) -> None:
+        """Thread-safe write of a single JSON line."""
+        with self._lock:
+            if self._file.closed:
+                return
+            try:
+                self._file.write(json.dumps(entry) + "\n")
+                self._file.flush()
+            except (OSError, ValueError) as exc:
+                logger.warning("Failed to write log entry: %s", exc)
 
     def close(self):
-        if not self._file.closed:
-            self._file.close()
+        with self._lock:
+            if not self._file.closed:
+                self._file.close()

@@ -25,6 +25,9 @@ from pathlib import Path
 from typing import List, Dict
 import os
 import hashlib
+import logging
+
+logger = logging.getLogger("rf_inference.pose")
 
 try:
     import onnxruntime as ort
@@ -62,21 +65,24 @@ class PoseEstimator:
             if opt.session is not None:
                 self.optimized = opt
                 self.use_optimized = True
-                print(f"[pose] Using OptimizedInference backend: {opt.backend}")
+                logger.info("Using OptimizedInference backend: %s", opt.backend)
                 return
         except Exception as e:
-            print(f"[pose] OptimizedInference unavailable: {e}")
+            logger.debug("OptimizedInference unavailable: %s", e)
         
         # 1. Try ONNX (standard providers)
         if ONNX_CKPT.exists() and has_ort:
             expected_hash = os.getenv("EXPECTED_ONNX_HASH")
             if expected_hash:
+                h = hashlib.sha256()
                 with open(ONNX_CKPT, "rb") as f:
-                    file_hash = hashlib.sha256(f.read()).hexdigest()
+                    for chunk in iter(lambda: f.read(1 << 20), b""):
+                        h.update(chunk)
+                file_hash = h.hexdigest()
                 if file_hash != expected_hash:
                     raise ValueError(f"CRITICAL SECURITY: ONNX model SHA256 mismatch! Expected {expected_hash}, got {file_hash}")
                     
-            print(f"[pose] Found ONNX checkpoint at {ONNX_CKPT}. Using heavily optimized ONNX Runtime.")
+            logger.info("Found ONNX checkpoint at %s. Using ONNX Runtime.", ONNX_CKPT)
             # Set providers based on environment
             providers = ['CPUExecutionProvider']
             env_dev = os.getenv("INFERENCE_DEVICE", "auto").lower()
@@ -89,7 +95,7 @@ class PoseEstimator:
                 self.use_onnx = True
                 return
             except Exception as e:
-                print(f"[pose] Failed to load ONNX: {e}. Falling back to PyTorch...")
+                logger.warning("Failed to load ONNX: %s. Falling back to PyTorch.", e)
 
         # 2. Fallback to native PyTorch
         env_dev = os.getenv("INFERENCE_DEVICE", "auto").lower()
@@ -103,14 +109,19 @@ class PoseEstimator:
         else:
             self.device = torch.device(env_dev)
 
-        self.model = PoseNet().to(self.device).eval()
+        try:
+            self.model = PoseNet().to(self.device).eval()
+        except RuntimeError as e:
+            logger.warning("Failed to use device %s, falling back to CPU: %s", self.device, e)
+            self.device = torch.device("cpu")
+            self.model = PoseNet().to(self.device).eval()
 
         if MODEL_CKPT.exists():
             state = torch.load(MODEL_CKPT, map_location=self.device)
             self.model.load_state_dict(state)
-            print(f"[pose] Loaded PyTorch checkpoint from {MODEL_CKPT}")
+            logger.info("Loaded PyTorch checkpoint from %s", MODEL_CKPT)
         else:
-            print(f"[pose] No checkpoint found at {MODEL_CKPT}. Using random PyTorch weights (simulation mode).")
+            logger.info("No checkpoint found at %s — simulation mode.", MODEL_CKPT)
         self.is_simulation = not MODEL_CKPT.exists() and not self.use_onnx
         self.sim_tick = 0
 
@@ -173,17 +184,18 @@ class PoseEstimator:
             raw = self.model(x).squeeze(0).cpu().numpy()  # [MAX_PEOPLE, 17, 4]
 
         results = []
-        for person_idx in range(MAX_PEOPLE):
+        num_people = min(MAX_PEOPLE, raw.shape[0]) if hasattr(raw, 'shape') else MAX_PEOPLE
+        for person_idx in range(num_people):
             person_raw = raw[person_idx]
             keypoints = []
-            # For simulation: only return "active" people if confidence avg is decent
-            # In a real model, this would be handled by the thresholding.
             for kp in person_raw:
+                if len(kp) < 4:
+                    continue
                 keypoints.append({
-                    "x":          float(kp[0]),
-                    "y":          float(kp[1]),
-                    "z":          float(kp[2]),
-                    "confidence": float(kp[3]),
+                    "x":          float(np.clip(kp[0], -10, 10)),
+                    "y":          float(np.clip(kp[1], -10, 10)),
+                    "z":          float(np.clip(kp[2], -10, 10)),
+                    "confidence": float(np.clip(kp[3], 0, 1)),
                 })
             results.append(keypoints)
         return results

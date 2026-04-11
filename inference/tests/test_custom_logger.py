@@ -3,6 +3,7 @@
 import pytest
 import json
 import os
+import threading
 import tempfile
 from unittest.mock import patch, MagicMock
 
@@ -19,6 +20,7 @@ def test_structured_logger_writes_json():
             from pathlib import Path
             logger.log_dir = Path(td)
             logger.log_file = Path(td) / "test.jsonl"
+            logger._lock = threading.Lock()
             logger._file = open(logger.log_file, "a", encoding="utf-8")
 
             # Mock psutil.virtual_memory for log_inference
@@ -59,6 +61,7 @@ def test_close_idempotent():
             from pathlib import Path
             logger.log_dir = Path(td)
             logger.log_file = Path(td) / "test.jsonl"
+            logger._lock = threading.Lock()
             logger._file = open(logger.log_file, "a", encoding="utf-8")
             logger.close()
             logger.close()  # should not raise

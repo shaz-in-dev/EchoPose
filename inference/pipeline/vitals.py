@@ -47,7 +47,11 @@ class VitalsExtractor:
 
     def push(self, amplitudes: np.ndarray) -> None:
         """Append a new CSI amplitude snapshot to the rolling buffer."""
-        self._amplitude_history.append(np.array(amplitudes, dtype=np.float64))
+        arr = np.asarray(amplitudes, dtype=np.float64)
+        if arr.size == 0 or not np.all(np.isfinite(arr)):
+            logger.warning("Vitals push: skipping invalid amplitudes (empty or NaN/Inf).")
+            return
+        self._amplitude_history.append(arr)
         if len(self._amplitude_history) > self.history_len:
             self._amplitude_history = self._amplitude_history[-self.history_len:]
 

@@ -32,10 +32,13 @@ class FusionPipeline:
         Extract Doppler features and pass them through adversarial bounds.
         """
         active_nodes = []
-        for frame in bundle.get("frames", []):
-            node_id    = int(frame["node_id"])
-            amplitudes = frame["amplitudes"]
-            self.denoiser.push(node_id, amplitudes)
+        for frame in bundle.get("frames") or []:
+            nid = frame.get("node_id")
+            amps = frame.get("amplitudes")
+            if nid is None or amps is None:
+                continue
+            node_id = int(nid)
+            self.denoiser.push(node_id, amps)
             if node_id not in active_nodes:
                 active_nodes.append(node_id)
 
