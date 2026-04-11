@@ -4,7 +4,7 @@ An ops-focused, full-stack Wi-Fi sensing system that treats radio waves like inv
 
 ## Why EchoPose Exists
 
-EchoPose is not trying to be a clone of large Rust-first CSI ecosystems. Its design goal is different:
+EchoPose is built for operations-first Wi-Fi sensing with rapid iteration and measurable robustness:
 - **Operational deployment first:** Docker Compose, Kubernetes, and systemd paths in one repo.
 - **Analytics beyond pose:** activity, fall-risk, occupancy, and tactical situational layers.
 - **Research-to-production bridge:** experimental modules live beside a running end-to-end stack.
@@ -17,6 +17,9 @@ EchoPose is not trying to be a clone of large Rust-first CSI ecosystems. Its des
 - [ADR index](docs/adr/README.md)
 - [Release runbook](docs/runbooks/release.md)
 - [Cross-environment benchmark harness](benchmarks/cross_environment_generalization.py)
+- [Signed model bundle module](inference/research/signed_model_bundle.py)
+- [Continual personalization module](inference/research/continual_personalization.py)
+- [Hardware normalization module](inference/pipeline/hardware_normalization.py)
 - [Browser WASM runtime](ui/wasm/README.md)
 - [Legacy v1 and proof system](v1/README.md)
 - [Python package scaffold (`echopose-sdk`)](echopose_sdk/README.md)

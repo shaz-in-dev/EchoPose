@@ -4,8 +4,8 @@ This document defines how EchoPose can be novel without copying other projects.
 
 ## 1. Positioning: Compete by Identity, Not by Star Count
 
-Do not try to win by matching another repo's raw metrics (stars, forks, crate count).
-Win by solving a different problem better.
+Do not try to win by matching any other repository's raw metrics (stars, forks, crate count).
+Win by solving deployment and reliability problems better.
 
 EchoPose identity:
 - Python-inference-first experimentation velocity.
@@ -21,6 +21,17 @@ EchoPose identity:
 - Do not optimize for vanity metrics before reliability metrics.
 
 ## 3. Novelty Pillars for EchoPose
+
+### EchoPose Naming Contract
+
+All production-track module names should be EchoPose-native and capability-descriptive.
+
+Examples:
+- `signed_model_bundle` instead of competitor-style container names.
+- `continual_personalization` instead of borrowed adaptation acronyms.
+- `hardware_normalization` with explicit sensor profiles (ESP32, Intel 5300).
+
+This keeps parity at the capability level while preserving a distinct architecture identity.
 
 ## Pillar A: Uncertainty-Aware RF Pose
 

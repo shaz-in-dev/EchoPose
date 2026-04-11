@@ -15,7 +15,7 @@ Status keys:
 - Self-learning / contrastive AI: NEXT
 - Cross-environment generalization: NEXT
 - WASM / browser support: LATER
-- Disaster response mode (WiFi-Mat style): LATER
+- Disaster-response operations mode: LATER
 - 542+ tests: LATER
 - Published pip package: DONE (scaffold)
 
