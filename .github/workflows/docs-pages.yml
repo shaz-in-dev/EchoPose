@@ -28,5 +28,9 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+      - name: Pages disabled notice
+        if: ${{ vars.ENABLE_GITHUB_PAGES != 'true' }}
+        run: echo "Skipping GitHub Pages deploy. Set repository variable ENABLE_GITHUB_PAGES=true after enabling Pages in repo settings."
       - name: Deploy to GitHub Pages
+        if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' }}
         uses: actions/deploy-pages@v4
