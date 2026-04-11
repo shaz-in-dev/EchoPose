@@ -1,5 +1,13 @@
 # EchoPose
 
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.88+-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![C](https://img.shields.io/badge/C-ESP--IDF-A8B9CC?logo=c&logoColor=white)](https://www.espressif.com/en/products/sdks/esp-idf)
+[![JavaScript](https://img.shields.io/badge/JavaScript-UI-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/docs/Web/JavaScript)
+[![PyPI](https://img.shields.io/pypi/v/echopose-sdk?logo=pypi&logoColor=white)](https://pypi.org/project/echopose-sdk/)
+[![crates.io](https://img.shields.io/crates/v/echopose-types?logo=rust&logoColor=white)](https://crates.io/crates/echopose-types)
+[![GHCR](https://img.shields.io/badge/GHCR-live-181717?logo=github&logoColor=white)](https://github.com/shaz-in-dev/EchoPose/pkgs/container/echopose-aggregator)
+
 An ops-focused, full-stack Wi-Fi sensing system that treats radio waves like invisible sonar. EchoPose detects, tracks, and renders human poses in real time using ESP32-S3 nodes and commodity compute.
 
 ## Why EchoPose Exists
@@ -11,11 +19,12 @@ EchoPose is built for operations-first Wi-Fi sensing with rapid iteration and me
 
 ## Current Status
 
-- **Automated tests:** 256 collected, 255 passing in CI (1 legacy test under active stabilization).
+- **Automated tests:** 256 collected, 256 passing in CI.
 - **Architecture records:** 10 ADRs in [docs/adr/README.md](docs/adr/README.md).
 - **Rust workspace:** 6 crates (shared types + denoise + sync + localize + aggregator + WASM).
 - **WASM pipeline:** browser bridge implemented in [ui/wasm_bridge.js](ui/wasm_bridge.js); build scripts in [scripts/build_wasm.ps1](scripts/build_wasm.ps1) and [scripts/build_wasm.sh](scripts/build_wasm.sh).
-- **Publishing:** release workflows for Python, Rust, and Docker are configured; package publishing is release-triggered and currently opt-in.
+- **Publishing:** release workflows for Python, Rust, and Docker are active and release-triggered.
+- **Registry releases:** [`echopose-sdk` on PyPI](https://pypi.org/project/echopose-sdk/) is live, EchoPose crates are live on crates.io, and container images are published to GHCR.
 
 ## Maturity Tracks
 
