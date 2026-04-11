@@ -1,4 +1,4 @@
-# EchoPose (formerly RF-Inference Mesh)
+# EchoPose
 
 An ops-focused, full-stack Wi-Fi sensing system that treats radio waves like invisible sonar. EchoPose detects, tracks, and renders human poses in real time using ESP32-S3 nodes and commodity compute.
 
@@ -8,6 +8,14 @@ EchoPose is built for operations-first Wi-Fi sensing with rapid iteration and me
 - **Operational deployment first:** Docker Compose, Kubernetes, and systemd paths in one repo.
 - **Analytics beyond pose:** activity, fall-risk, occupancy, and tactical situational layers.
 - **Research-to-production bridge:** experimental modules live beside a running end-to-end stack.
+
+## Current Status
+
+- **Automated tests:** 256 collected, 255 passing in CI (1 legacy test under active stabilization).
+- **Architecture records:** 10 ADRs in [docs/adr/README.md](docs/adr/README.md).
+- **Rust workspace:** 6 crates (shared types + denoise + sync + localize + aggregator + WASM).
+- **WASM pipeline:** browser bridge implemented in [ui/wasm_bridge.js](ui/wasm_bridge.js); build scripts in [scripts/build_wasm.ps1](scripts/build_wasm.ps1) and [scripts/build_wasm.sh](scripts/build_wasm.sh).
+- **Publishing:** release workflows for Python, Rust, and Docker are configured; package publishing is release-triggered and currently opt-in.
 
 ## Maturity Tracks
 
