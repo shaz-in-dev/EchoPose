@@ -1,0 +1,9 @@
+[package]
+name = "echopose-sync"
+description = "Timestamp-based multi-node CSI frame synchronization"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+echopose-types = { path = "../echopose-types" }

@@ -70,6 +70,15 @@ function handleFrame(data) {
   } 
   
   if (data.amplitudes) {
+    // Use WASM normalisation if available (gracefully falls back to JS)
+    if (window.EchoPoseWasm) {
+      const nodes = data.amplitudes;
+      for (const nid of Object.keys(nodes)) {
+        if (nodes[nid] && nodes[nid].amplitudes) {
+          nodes[nid].amplitudes = EchoPoseWasm.normalizeCSI(nodes[nid].amplitudes);
+        }
+      }
+    }
     heatmap.push(data.amplitudes);
   }
   // V2 format (Backward compatibility for old recordings)

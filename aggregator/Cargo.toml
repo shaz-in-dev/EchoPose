@@ -9,6 +9,10 @@ name = "aggregator"
 path = "src/main.rs"
 
 [dependencies]
+echopose-types    = { path = "../crates/echopose-types" }
+echopose-denoise  = { path = "../crates/echopose-denoise" }
+echopose-sync     = { path = "../crates/echopose-sync" }
+echopose-localize = { path = "../crates/echopose-localize" }
 tokio        = { version = "1",  features = ["full"] }
 axum         = { version = "0.7", features = ["ws"] }
 tower        = "0.4"

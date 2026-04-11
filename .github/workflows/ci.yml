@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Cargo check aggregator
-        run: |
-          cd aggregator
-          cargo check --release
+      - name: Cargo check workspace
+        run: cargo check --workspace --release
+      - name: Cargo test workspace
+        run: cargo test --workspace

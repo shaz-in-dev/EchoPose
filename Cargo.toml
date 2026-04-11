@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/echopose-types",
+    "crates/echopose-denoise",
+    "crates/echopose-sync",
+    "crates/echopose-localize",
+    "aggregator",
+    "ui/wasm/echopose_wasm",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"

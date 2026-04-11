@@ -1,0 +1,9 @@
+[package]
+name = "echopose-types"
+description = "Core CSI data types shared across all EchoPose Rust crates"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true

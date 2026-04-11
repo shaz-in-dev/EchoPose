@@ -1,0 +1,9 @@
+[package]
+name = "echopose-denoise"
+description = "Rolling median background subtraction for CSI denoising"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+echopose-types = { path = "../echopose-types" }

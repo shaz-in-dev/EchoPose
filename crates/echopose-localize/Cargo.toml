@@ -1,0 +1,9 @@
+[package]
+name = "echopose-localize"
+description = "RSSI-based node position estimation via MDS"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
