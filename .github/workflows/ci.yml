@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install inference dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r inference/requirements.txt
+      - name: Run inference tests
+        run: |
+          pytest inference/tests -q
+      - name: Generate benchmark evidence report
+        run: |
+          python benchmarks/cross_environment_generalization.py \
+            --manifest data/baselines/cross_env/sample_manifest.json \
+            --out data/baselines/cross_env/latest.json
+      - name: Verify benchmark report signature and hash evidence
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest_path = Path("data/baselines/cross_env/sample_manifest.json")
+          report_path = Path("data/baselines/cross_env/latest.json")
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+
+          got_sig = report.get("_report_sha256")
+          if not isinstance(got_sig, str) or not got_sig:
+              raise SystemExit("missing report signature")
+
+          unsigned = dict(report)
+          unsigned.pop("_report_sha256", None)
+          expected_sig = hashlib.sha256(
+              json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode("utf-8")
+          ).hexdigest()
+          if got_sig != expected_sig:
+              raise SystemExit("benchmark report signature mismatch")
+
+          evidence = report.get("_evidence", {})
+          expected_manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+          if evidence.get("manifest_sha256") != expected_manifest_sha:
+              raise SystemExit("manifest hash mismatch")
+
+          for rel, digest in evidence.get("data_files_sha256", {}).items():
+              p = Path(rel)
+              if not p.exists():
+                  raise SystemExit(f"missing data file: {rel}")
+              got = hashlib.sha256(p.read_bytes()).hexdigest()
+              if got != digest:
+                  raise SystemExit(f"data file hash mismatch: {rel}")
+
+          print("benchmark evidence verification passed")
+          PY
+      - name: Verify manifest witness via proof CLI
+        run: |
+          python -m v1.proof_system create-manifest-witness \
+            --manifest data/baselines/cross_env/sample_manifest.json \
+            --out data/baselines/cross_env/sample_manifest.witness.json
+          python -m v1.proof_system verify-manifest-witness \
+            --manifest data/baselines/cross_env/sample_manifest.json \
+            --witness data/baselines/cross_env/sample_manifest.witness.json
+
+  rust-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cargo check aggregator
+        run: |
+          cd aggregator
+          cargo check --release

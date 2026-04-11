@@ -1,0 +1,15 @@
+site_name: EchoPose Docs
+site_description: EchoPose architecture, ADRs, runbooks, and benchmarks
+repo_url: https://github.com/shaz-in-dev/EchoPose
+theme:
+  name: material
+nav:
+  - Home: README.md
+  - Docs Hub: docs/README.md
+  - ADR Index: docs/adr/README.md
+  - Differentiation: DIFFERENTIATION_STRATEGY.md
+  - Level-Up Plan: LEVEL_UP_MASTER_PLAN.md
+  - Runbook - Release: docs/runbooks/release.md
+markdown_extensions:
+  - admonition
+  - tables

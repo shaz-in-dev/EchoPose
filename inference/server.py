@@ -45,6 +45,8 @@ from pipeline.gesture import GestureRecognizer
 from pipeline.occupancy import OccupancyAnalyzer
 from pipeline.emotion import EmotionDetector
 from pipeline.health_alerts import HealthAnomalyDetector
+from pipeline.disaster_response import DisasterResponseEngine
+from pipeline.disaster_bridge import attach_disaster_context
 
 from pipeline.tactical import (
     TacticalTargetTracker,
@@ -100,6 +102,7 @@ gesture_recognizer = GestureRecognizer()
 occupancy_analyzer = OccupancyAnalyzer()
 emotion_detector = EmotionDetector()
 health_alerter = HealthAnomalyDetector()
+disaster_engine = DisasterResponseEngine()
 
 # Tactical analytics modules
 tactical_tracker = TacticalTargetTracker()
@@ -117,6 +120,10 @@ _latest_tactical: dict = {}
 
 # Latest analytics snapshot (updated each inference cycle)
 _latest_analytics: dict = {}
+
+# Latest disaster snapshot (updated each inference cycle)
+_latest_disaster: dict = {}
+
 class ConnectionManager:
     """Thread-safe WebSocket connection manager."""
     def __init__(self):
@@ -241,8 +248,6 @@ async def connect_and_process(fusion_pipeline):
                     "emotion": emotion,
                     "health_alerts": alerts,
                 }
-                global _latest_analytics
-                _latest_analytics = analytics
 
                 # ── Tactical Analytics ────────────────────────────
                 for f in bundle.get("frames", []):
@@ -291,6 +296,16 @@ async def connect_and_process(fusion_pipeline):
                 global _latest_tactical
                 _latest_tactical = tactical_data
 
+                analytics, disaster_data = attach_disaster_context(
+                    analytics=analytics,
+                    tactical=tactical_data,
+                    engine=disaster_engine,
+                )
+                global _latest_analytics
+                _latest_analytics = analytics
+                global _latest_disaster
+                _latest_disaster = disaster_data
+
                 # Extract pipeline metrics for logging
                 all_kp_confs = [kp["confidence"] for s in smoothed_skeletons for kp in s]
                 mean_conf = np.mean(all_kp_confs) if all_kp_confs else 0.0
@@ -309,6 +324,7 @@ async def connect_and_process(fusion_pipeline):
                     "simulation": estimator.is_simulation,
                     "analytics": analytics,
                     "tactical": tactical_data,
+                    "disaster": disaster_data,
                 })
 
                 await manager.broadcast(payload)
@@ -371,6 +387,13 @@ async def tactical(request: Request):
     """Return the latest tactical analytics snapshot."""
     limiter.check_rate_limit(request.client.host)
     return _latest_tactical or {"status": "no_data"}
+
+
+@app.get("/disaster")
+async def disaster(request: Request):
+    """Return the latest disaster-response analytics snapshot."""
+    limiter.check_rate_limit(request.client.host)
+    return _latest_disaster or {"status": "no_data"}
 
 
 if __name__ == "__main__":

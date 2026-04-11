@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "echopose-sdk"
+version = "0.1.0"
+description = "EchoPose utilities for WiFi CSI pose ingestion, quality scoring, and replay tooling"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  {name = "EchoPose Contributors"}
+]
+license = {text = "MIT"}
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+dependencies = [
+  "numpy>=1.26.4"
+]
+
+[project.urls]
+Homepage = "https://github.com/shaz-in-dev/EchoPose"
+Issues = "https://github.com/shaz-in-dev/EchoPose/issues"
+
+[project.scripts]
+echopose-sdk = "echopose_sdk.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,10 +1,29 @@
 # EchoPose (formerly RF-Inference Mesh)
 
-An advanced, full-stack Wi-Fi sensing system that treats radio waves like invisible sonar. EchoPose detects, tracks, and renders human poses **through walls** in real-time using only ESP32-S3 nodes and your standard computer hardware.
+An ops-focused, full-stack Wi-Fi sensing system that treats radio waves like invisible sonar. EchoPose detects, tracks, and renders human poses in real time using ESP32-S3 nodes and commodity compute.
+
+## Why EchoPose Exists
+
+EchoPose is not trying to be a clone of large Rust-first CSI ecosystems. Its design goal is different:
+- **Operational deployment first:** Docker Compose, Kubernetes, and systemd paths in one repo.
+- **Analytics beyond pose:** activity, fall-risk, occupancy, and tactical situational layers.
+- **Research-to-production bridge:** experimental modules live beside a running end-to-end stack.
+
+## Maturity Tracks
+
+- [Differentiation strategy](DIFFERENTIATION_STRATEGY.md)
+- [Level-up master plan](LEVEL_UP_MASTER_PLAN.md)
+- [Docs hub](docs/README.md)
+- [ADR index](docs/adr/README.md)
+- [Release runbook](docs/runbooks/release.md)
+- [Cross-environment benchmark harness](benchmarks/cross_environment_generalization.py)
+- [Browser WASM runtime](ui/wasm/README.md)
+- [Legacy v1 and proof system](v1/README.md)
+- [Python package scaffold (`echopose-sdk`)](echopose_sdk/README.md)
 
 ## V2 Features
 
-EchoPose V2 is a production-ready Wi-Fi CSI pose estimation system featuring:
+EchoPose V2 is a production-track Wi-Fi CSI pose estimation system featuring:
 - **Trained PoseNetV2 Model:** Multi-scale CNN + LSTM + Attention architecture with a trained PyTorch checkpoint (`models/pose_net.pt`).
 - **ONNX Inference Path:** CPU/Edge execution via `onnxruntime` with automatic fallback to PyTorch if ONNX is unavailable.
 - **Buttery-Smooth Tracking:** Temporal Exponential Moving Average (EMA) filters eliminate signal jitter.
@@ -18,9 +37,9 @@ EchoPose V2 is a production-ready Wi-Fi CSI pose estimation system featuring:
 ### Health Metrics & Vitals (NEW)
 - **Heart Rate Detection:** Chest micro-Doppler FFT extracts 40–180 bpm HR from CSI subcarriers 30–40.
 - **Respiratory Rate:** Thorax motion analysis detects 6–60 breaths/min via bandpass + Welch PSD.
-- **SpO2 Estimation:** Multi-frequency amplitude ratio proxy for blood oxygen saturation (85–100%).
-- **Body Temperature:** CSI amplitude variance correlation with calibrated thermal offset.
-- **Blood Pressure:** Pulse Wave Velocity (multi-node) or HR-based regression for systolic/diastolic estimation.
+- **SpO2 / Temperature / Blood Pressure Proxies:** Experimental inference-only research signals.
+
+> **Medical Safety Notice:** EchoPose is not a medical device and must not be used for diagnosis, treatment, or emergency clinical decisions.
 
 ### Activity & Analytics (NEW)
 - **Gait Analysis:** Walking speed, stride length, cadence, and gait symmetry from hip keypoint trajectories.
@@ -73,6 +92,12 @@ Output: 3 people × 17 COCO keypoints × {x, y, z, confidence}
 | Confidence MAE | 0.2534 |
 
 > **Note:** These metrics are from synthetic (random) test data — they validate that the model architecture and training pipeline function correctly end-to-end. Real-world accuracy depends on a labeled CSI→pose dataset collected with your specific hardware setup. See [Training with Real Data](#training-with-real-data) below.
+
+## Maturity Snapshot
+
+- The stack is functional end-to-end (firmware -> Rust aggregation -> Python inference -> Web UI).
+- Some modules are research-grade and require further validation for production claims.
+- Novelty focus for upcoming releases: domain shift robustness, uncertainty-aware outputs, and reproducible benchmarking.
 
 ### Robustness & Edge Cases
 

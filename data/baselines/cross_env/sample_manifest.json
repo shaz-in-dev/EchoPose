@@ -1,0 +1,16 @@
+{
+  "train": [
+    {
+      "features": "data/proofs/sample_train_features.npy",
+      "poses": "data/proofs/sample_train_poses.npy"
+    }
+  ],
+  "test": {
+    "room_b": [
+      {
+        "features": "data/proofs/sample_test_features.npy",
+        "poses": "data/proofs/sample_test_poses.npy"
+      }
+    ]
+  }
+}

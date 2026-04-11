@@ -1,0 +1,14 @@
+[package]
+name = "echopose_wasm"
+version = "0.1.0"
+edition = "2021"
+description = "EchoPose browser-side utilities compiled to WebAssembly"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
