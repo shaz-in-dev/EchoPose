@@ -6,4 +6,4 @@ version.workspace = true
 license.workspace = true
 
 [dependencies]
-echopose-types = { path = "../echopose-types" }
+echopose-types = { path = "../echopose-types", version = "0.1.0" }

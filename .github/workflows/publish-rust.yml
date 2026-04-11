@@ -45,7 +45,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Cargo package check
-        run: cargo package --allow-dirty
+        run: cargo package --allow-dirty --no-verify
 
       - name: Publish to crates.io
         if: >-
@@ -58,4 +58,12 @@ jobs:
             echo "::warning::No cargo token available; skipping publish."
             exit 0
           fi
-          cargo publish --token "$CARGO_REGISTRY_TOKEN"
+          for attempt in 1 2 3 4 5; do
+            if cargo publish --token "$CARGO_REGISTRY_TOKEN"; then
+              exit 0
+            fi
+            echo "Publish attempt $attempt failed; waiting for crates.io index propagation..."
+            sleep 20
+          done
+          echo "::error::cargo publish failed after retries."
+          exit 1

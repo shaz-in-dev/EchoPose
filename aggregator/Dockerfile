@@ -2,7 +2,8 @@
 FROM rust:1.85 as builder
 WORKDIR /app
 COPY . .
-RUN cargo build --release
+WORKDIR /app/aggregator
+RUN cargo build --release --bin aggregator
 
 # Production Stage
 FROM debian:bookworm-slim

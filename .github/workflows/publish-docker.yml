@@ -13,10 +13,11 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - image: echopose-aggregator
-            context: aggregator
+            context: .
             file: aggregator/Dockerfile
           - image: echopose-inference
             context: inference
