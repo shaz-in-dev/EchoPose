@@ -1,21 +1,76 @@
-MIT License
+EchoPose — Proprietary Licence
 
-Copyright (c) 2026 EchoPose Contributors
+Copyright (c) 2026 Muhammed Shazin Sadhik Kunhi Parambath
+All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+───────────────────────────────────────────────────────────────
+SOURCE-AVAILABLE LICENCE (Non-Commercial)
+───────────────────────────────────────────────────────────────
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to use the Software solely for
+personal, educational, or non-commercial research purposes,
+subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+  1. You MAY view, study, and run the Software for personal
+     learning, academic research, or evaluation.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+  2. You MAY fork and modify the Software for personal or
+     academic use, provided this licence notice is retained
+     in all copies or substantial portions of the Software.
+
+  3. You MAY NOT sell, sublicense, lease, rent, or otherwise
+     commercialise the Software or any derivative work.
+
+  4. You MAY NOT use the Software, in whole or in part, to
+     build a competing product or service.
+
+  5. You MAY NOT redistribute the Software or derivative
+     works for any commercial purpose.
+
+  6. You MAY NOT remove or alter this licence notice, any
+     copyright notices, or any attribution to the author.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+───────────────────────────────────────────────────────────────
+COMMERCIAL USE
+───────────────────────────────────────────────────────────────
+Any commercial use of this Software — including but not limited
+to the following — requires a separate written commercial
+licence agreement with the author:
+
+  • Deploying EchoPose in a product or service that generates
+    revenue, directly or indirectly.
+  • Deploying EchoPose within a for-profit organisation,
+    government agency, or defence/military entity.
+  • Integrating EchoPose into a healthcare, security, or
+    facility-management system used by third parties.
+  • Selling, reselling, or redistributing the Software or
+    any derivative work for payment of any kind.
+  • Offering the Software as part of a hosted or managed
+    service (SaaS, PaaS, or similar).
+
+Unauthorised commercial use is a violation of this licence and
+may be subject to legal action.
+
+───────────────────────────────────────────────────────────────
+COMMERCIAL LICENCE ENQUIRIES
+───────────────────────────────────────────────────────────────
+To obtain a commercial licence, contact:
+
+  Muhammed Shazin Sadhik Kunhi Parambath
+  shazin2889@gmail.com
+
+Commercial licences include:
+  • Deployment rights with no open-source obligations
+  • SLA and support options
+  • Indemnification terms
+  • Custom feature development agreements

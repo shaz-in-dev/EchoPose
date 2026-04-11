@@ -299,6 +299,15 @@ Bytes 16–N    iq_data         int16[]  interleaved I, Q pairs
 
 ---
 
-## License
+## Licence
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Copyright (c) 2026 Muhammed Shazin Sadhik Kunhi Parambath. All rights reserved.
+
+EchoPose is **source-available but not free for commercial use**.
+
+- **Personal / academic / non-commercial use** — Free under the [Source-Available Licence](LICENSE)
+- **Commercial / enterprise / defence / healthcare use** — [Commercial Licence Required](COMMERCIAL_LICENSE.md)
+
+You may **not** sell, resell, sublicense, or monetise this software without written permission.
+
+Contact **shazin2889@gmail.com** for commercial licensing.
