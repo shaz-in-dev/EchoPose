@@ -25,6 +25,13 @@ class StructuredLogger:
     def log_inference(self, latency_ms: float, mean_confidence: float, anomalies: list, node_status: dict):
         """JSON log with searchable fields"""
         trace_id = str(uuid.uuid4())
+
+        # CI tests may mock psutil; ensure we always emit a primitive float.
+        try:
+            used_bytes = getattr(psutil.virtual_memory(), "used", 0.0)
+            memory_mb = round(float(used_bytes) / 1e6, 2)
+        except Exception:
+            memory_mb = 0.0
         
         log_entry = {
             'timestamp': time.time(),
@@ -34,7 +41,7 @@ class StructuredLogger:
             'mean_confidence': round(mean_confidence, 4),
             'anomalies_detected': anomalies,
             'node_status': node_status,
-            'memory_mb': round(psutil.virtual_memory().used / 1e6, 2)
+            'memory_mb': memory_mb
         }
         
         self._file.write(json.dumps(log_entry) + "\n")
