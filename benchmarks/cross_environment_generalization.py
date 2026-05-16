@@ -55,6 +55,36 @@ def pck(pred: np.ndarray, gt: np.ndarray, threshold: float = 0.1) -> float:
     return float(np.mean(d < threshold))
 
 
+def body_normalized_pck(
+    pred: np.ndarray, gt: np.ndarray, threshold: float = 0.1
+) -> float:
+    """PCK where the threshold is scaled per sample by body height.
+
+    Body height = distance from ankle midpoint (joints 15 & 16) to nose
+    (joint 0) in ground-truth coordinates.  A prediction is "correct" for
+    joint j in sample n when its error < threshold * body_height[n].
+
+    Parameters
+    ----------
+    pred, gt : np.ndarray
+        Shape ``(N, P, J, 3)`` — people P, joints J, xyz.
+    threshold : float
+        Fraction of body height used as the PCK threshold (default 0.1).
+    """
+    # Average across people to get (N, J, 3)
+    pred_avg = pred.mean(axis=1)
+    gt_avg = gt.mean(axis=1)
+    errors = np.linalg.norm(pred_avg - gt_avg, axis=-1)   # (N, J)
+
+    ankle_mid = (gt_avg[:, 15] + gt_avg[:, 16]) / 2.0    # (N, 3)
+    head = gt_avg[:, 0]                                    # (N, 3)
+    heights = np.linalg.norm(head - ankle_mid, axis=-1) + 1e-8  # (N,)
+
+    thresholds = threshold * heights[:, None]              # (N, J)
+    correct = errors < thresholds
+    return float(correct.mean())
+
+
 def load_pairs(items: List[Dict[str, str]]) -> Tuple[np.ndarray, np.ndarray]:
     xs = []
     ys = []
@@ -158,6 +188,7 @@ def run(manifest_path: Path, out_path: Path) -> Dict[str, Any]:
         room_metrics[room] = {
             "mpjpe": mpjpe(pred, y3),
             "pck@0.1": pck(pred, y3, 0.1),
+            "body_pck@0.1": body_normalized_pck(pred, y3, 0.1),
             "samples": int(x.shape[0]),
         }
 

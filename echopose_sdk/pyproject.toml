@@ -4,21 +4,31 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "echopose-sdk"
-version = "0.1.0"
-description = "EchoPose utilities for WiFi CSI pose ingestion, quality scoring, and replay tooling"
+version = "0.2.0"
+description = "WiFi CSI pose estimation toolkit — signal utilities, skeleton ops, evaluation metrics, and bundle streaming"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-  {name = "EchoPose Contributors"}
+  {name = "Muhammed Shazin Sadhik Kunhi Parambath", email = "shazin2889@gmail.com"}
 ]
 license = {text = "MIT"}
+keywords = [
+  "wifi", "csi", "pose-estimation", "human-sensing", "rf-sensing",
+  "channel-state-information", "esp32", "wireless-sensing", "body-tracking"
+]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent"
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers"
 ]
 dependencies = [
-  "numpy>=1.26.4"
+  "numpy>=1.26.4",
+  "scipy>=1.11"
 ]
 
 [project.urls]
