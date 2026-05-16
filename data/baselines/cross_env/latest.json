@@ -1,7 +1,23 @@
 {
-  "room_b": {
-    "mpjpe": 1.6168512105941772,
-    "pck@0.1": 0.0,
-    "samples": 24
-  }
+  "benchmark": "cross_environment_generalization",
+  "protocol_version": "1.0",
+  "rooms": {
+    "room_b": {
+      "mpjpe": 1.6165426969528198,
+      "pck@0.1": 0.0,
+      "samples": 24
+    }
+  },
+  "_evidence": {
+    "algorithm": "sha256",
+    "manifest_sha256": "820fe3dbdd0db1654368247a1e419e720086d20d737bfb7763491dbc1c1ace08",
+    "data_files_sha256": {
+      "data\\proofs\\sample_test_features.npy": "3216ad70dbf663feda6b6ba9539f880e8e4d1f6a13f1d0cb3935b9013e036bb9",
+      "data\\proofs\\sample_test_poses.npy": "e7a6b416be0f38f948e59bc09fb41a27bdfdcdf10f9efe3f6887a0c05cf3c111",
+      "data\\proofs\\sample_train_features.npy": "13b0f85be56c63e522c08594ebfee9e86ad6097ef1126e4e7cb1b5cd24c4535a",
+      "data\\proofs\\sample_train_poses.npy": "3f0c6752e3479ec75f564ad6c68d7099fe33cd6c888fe14293650c035e7bca69"
+    },
+    "baseline_id": "zero_z-v2"
+  },
+  "_report_sha256": "ec20104c419a9ae3c9792eab8605fd6edbc6411a35d615ce22740b4e170f5924"
 }
