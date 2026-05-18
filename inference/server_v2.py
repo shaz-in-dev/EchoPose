@@ -17,7 +17,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 import websockets
 from websockets.exceptions import WebSocketException
 from pipeline.fusion import FusionPipeline
-from gpu_server import DistributedInference
+from pipeline.pose import PoseEstimator as DistributedInference  # gpu_server removed; use shared estimator
 from security import limiter, verify_api_key
 
 logger = logging.getLogger("rf_inference.async_server")
@@ -116,6 +116,12 @@ class HighThroughputServer:
 
 server = HighThroughputServer()
 
+def _client_ip(request: Request) -> str:
+    """Extract client IP safely — works behind nginx/k8s ingress where request.client may be None."""
+    if request.client is not None:
+        return request.client.host
+    return request.headers.get("X-Forwarded-For", "unknown").split(",")[0].strip()
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Spin up background workers and stop them cleanly during shutdown.
@@ -145,14 +151,14 @@ async def pose_stream(ws: WebSocket):
 @app.post("/ingest")
 async def ingest_bundle(bundle: dict, request: Request, _key: str = Depends(verify_api_key)):
     """Aggregator sends bundles here via HTTP/WS. Queue it for non-blocking processing."""
-    limiter.check_rate_limit(request.client.host)
+    await limiter.check_rate_limit(_client_ip(request))
     if not server.bundle_queue.full():
         await server.bundle_queue.put(bundle)
     return {"status": "queued"}
 
 @app.get("/health")
 async def health(request: Request):
-    limiter.check_rate_limit(request.client.host)
+    await limiter.check_rate_limit(_client_ip(request))
     return {
         "status": "ok",
         "ui_clients": len(server.clients),

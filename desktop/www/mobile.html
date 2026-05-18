@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#080c14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="EchoPose" />
+  <title>EchoPose Mobile</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* ================================================================
+   EchoPose Mobile — PWA Interface
+   ================================================================ */
+:root {
+  --bg:         #080c14;
+  --surface:    #0f1623;
+  --surface2:   #162030;
+  --surface3:   #1c2a3f;
+  --border:     rgba(80,160,255,0.12);
+  --accent:     #38bdf8;
+  --accent2:    #818cf8;
+  --accent3:    #34d399;
+  --danger:     #f87171;
+  --warn:       #fbbf24;
+  --text:       #e2e8f0;
+  --muted:      #7c8fa8;
+  --mono:       'JetBrains Mono', monospace;
+  --sans:       'Inter', sans-serif;
+  --r:          14px;
+  --safe-top:   env(safe-area-inset-top, 0px);
+  --safe-bot:   env(safe-area-inset-bottom, 0px);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { height: 100%; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Top Bar ─────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--safe-top) + 10px) 16px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 20;
+}
+.topbar-brand { display: flex; align-items: center; gap: 10px; }
+.brand-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent3);
+  box-shadow: 0 0 0 0 rgba(52,211,153,.7);
+  animation: ping 2s infinite;
+}
+@keyframes ping {
+  0%   { box-shadow: 0 0 0 0 rgba(52,211,153,.7); }
+  70%  { box-shadow: 0 0 0 8px rgba(52,211,153,0); }
+  100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+}
+.brand-name { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+.brand-name span { color: var(--accent); }
+
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+.badge {
+  font-size: 10px; font-weight: 700;
+  padding: 3px 9px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.badge-disconnected { background: rgba(248,113,113,.15); color: var(--danger); border: 1px solid rgba(248,113,113,.3); }
+.badge-connected    { background: rgba(52,211,153,.15);  color: var(--accent3); border: 1px solid rgba(52,211,153,.3); }
+.badge-sim          { background: rgba(251,191,36,.15);  color: var(--warn);    border: 1px solid rgba(251,191,36,.3); }
+.fps-chip {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--muted); background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 3px 8px;
+}
+
+/* ── Page Container ──────────────────────────────────── */
+#pages {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+.page {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 14px 14px calc(var(--safe-bot) + 76px);
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.page.active { display: flex; }
+
+/* ── Bottom Nav ──────────────────────────────────────── */
+.bottom-nav {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: var(--safe-bot);
+  flex-shrink: 0;
+  z-index: 20;
+}
+.nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px 12px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: color .15s;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.nav-btn.active { color: var(--accent); }
+.nav-btn svg { width: 22px; height: 22px; }
+.nav-indicator {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  margin-top: -2px;
+}
+.nav-btn.active .nav-indicator { opacity: 1; }
+
+/* ── Cards ───────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.card-title {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted);
+}
+.card-badge {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 7px; border-radius: 999px;
+}
+.card-body { padding: 14px; }
+
+/* ── Overview Tab ────────────────────────────────────── */
+.hero-metric {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.hero-icon { font-size: 36px; line-height: 1; }
+.hero-info { flex: 1; }
+.hero-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.hero-value { font-size: 42px; font-weight: 800; line-height: 1; font-family: var(--mono); }
+.hero-unit  { font-size: 14px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.metric-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.metric-tile-icon { font-size: 20px; }
+.metric-tile-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.metric-tile-value { font-size: 26px; font-weight: 800; font-family: var(--mono); line-height: 1; }
+.metric-tile-unit { font-size: 11px; color: var(--muted); }
+
+.alert-banner {
+  border-radius: var(--r);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid;
+}
+.alert-banner.normal  { background: rgba(52,211,153,.08);  border-color: rgba(52,211,153,.25);  color: var(--accent3); }
+.alert-banner.warning { background: rgba(251,191,36,.08);  border-color: rgba(251,191,36,.25);  color: var(--warn); }
+.alert-banner.critical{ background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.25); color: var(--danger); }
+.alert-banner-icon { font-size: 24px; }
+.alert-banner-text { flex: 1; }
+.alert-banner-level { font-size: 13px; font-weight: 700; }
+.alert-banner-detail { font-size: 12px; opacity: .75; margin-top: 2px; }
+
+/* ── Vitals Tab ──────────────────────────────────────── */
+.vital-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.vital-icon-wrap {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.vital-icon-wrap.hr    { background: rgba(248,113,113,.15); }
+.vital-icon-wrap.rr    { background: rgba(56,189,248,.15);  }
+.vital-icon-wrap.spo2  { background: rgba(130,111,248,.15); }
+.vital-icon-wrap.temp  { background: rgba(251,191,36,.15);  }
+.vital-icon-wrap.bp    { background: rgba(52,211,153,.15);  }
+.vital-info { flex: 1; }
+.vital-name { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+.vital-reading {
+  font-size: 32px; font-weight: 800; font-family: var(--mono); line-height: 1;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.vital-reading-unit { font-size: 13px; color: var(--muted); font-weight: 400; }
+.vital-status { font-size: 11px; margin-top: 4px; font-weight: 500; }
+.vital-status.ok     { color: var(--accent3); }
+.vital-status.warn   { color: var(--warn); }
+.vital-status.alert  { color: var(--danger); }
+
+.stress-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+}
+.stress-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.stress-title { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+.stress-level { font-size: 16px; font-weight: 700; }
+.stress-bar-track {
+  background: var(--surface2);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+.stress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent3), var(--warn), var(--danger));
+  transition: width .5s ease;
+}
+.stress-score { font-size: 12px; color: var(--muted); margin-top: 8px; font-family: var(--mono); }
+
+/* ── Tactical Tab ────────────────────────────────────── */
+.threat-hero {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px 16px;
+  text-align: center;
+}
+.threat-label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 12px; }
+.threat-level-big {
+  font-size: 52px; font-weight: 900; letter-spacing: -0.02em;
+  transition: color .3s;
+}
+.threat-level-big.green  { color: var(--accent3); }
+.threat-level-big.yellow { color: var(--warn); }
+.threat-level-big.red    { color: var(--danger); animation: pulse-red 1s infinite; }
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .6; }
+}
+.threat-sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+.tac-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tac-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.tac-tile-label { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+.tac-tile-value { font-size: 22px; font-weight: 800; font-family: var(--mono); line-height: 1; }
+.tac-tile-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.intent-bar-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+}
+.intent-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.intent-title { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+.intent-label { font-size: 16px; font-weight: 700; }
+.intent-track {
+  background: var(--surface2); border-radius: 999px;
+  height: 10px; overflow: hidden; margin-bottom: 6px;
+}
+.intent-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent3) 0%, var(--warn) 60%, var(--danger) 100%);
+  transition: width .5s ease;
+}
+.intent-score { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+/* ── Activity Tab ────────────────────────────────────── */
+.activity-hero {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px 16px;
+  text-align: center;
+}
+.activity-label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
+.activity-big { font-size: 38px; font-weight: 800; letter-spacing: -0.02em; color: var(--accent); }
+.activity-conf { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+.gait-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.gait-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.gait-tile-label { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+.gait-tile-value { font-size: 24px; font-weight: 800; font-family: var(--mono); }
+.gait-tile-unit { font-size: 11px; color: var(--muted); margin-left: 3px; }
+
+.fall-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.fall-icon { font-size: 36px; }
+.fall-info { flex: 1; }
+.fall-status { font-size: 22px; font-weight: 700; }
+.fall-status.safe   { color: var(--accent3); }
+.fall-status.risk   { color: var(--warn); }
+.fall-status.fallen { color: var(--danger); }
+.fall-detail { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+.row-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.row-item:last-child { border-bottom: none; }
+.row-key { font-size: 13px; color: var(--muted); }
+.row-val { font-size: 14px; font-weight: 600; font-family: var(--mono); }
+
+/* ── Settings Tab ────────────────────────────────────── */
+.settings-section { display: flex; flex-direction: column; gap: 10px; }
+.settings-group-label {
+  font-size: 10px; color: var(--muted); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em;
+  padding-left: 4px;
+}
+.settings-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.settings-field {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings-field:last-child { border-bottom: none; }
+.settings-field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.settings-field input, .settings-field select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  width: 100%;
+  outline: none;
+}
+.settings-field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(56,189,248,.1);
+}
+.settings-toggle {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.settings-toggle:last-child { border-bottom: none; }
+.toggle-info { flex: 1; }
+.toggle-label { font-size: 14px; font-weight: 500; }
+.toggle-desc  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.toggle-switch {
+  position: relative; width: 44px; height: 26px;
+  flex-shrink: 0; margin-left: 12px;
+}
+.toggle-switch input { display: none; }
+.toggle-track {
+  position: absolute; inset: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.toggle-switch input:checked + .toggle-track { background: var(--accent); border-color: var(--accent); }
+.toggle-thumb {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: left .2s, background .2s;
+}
+.toggle-switch input:checked ~ .toggle-thumb { left: 21px; background: var(--bg); }
+
+.btn-primary {
+  display: block; width: 100%;
+  background: var(--accent);
+  color: var(--bg);
+  border: none; border-radius: 12px;
+  padding: 15px;
+  font-size: 15px; font-weight: 700;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.btn-primary:active { opacity: .85; transform: scale(.98); }
+.btn-danger {
+  display: block; width: 100%;
+  background: rgba(248,113,113,.15);
+  color: var(--danger);
+  border: 1px solid rgba(248,113,113,.3);
+  border-radius: 12px;
+  padding: 15px;
+  font-size: 15px; font-weight: 700;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: opacity .15s;
+}
+
+.node-list { display: flex; flex-direction: column; gap: 6px; }
+.node-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.node-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.node-dot.online  { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); }
+.node-dot.offline { background: var(--danger); }
+.node-id   { font-family: var(--mono); font-size: 13px; font-weight: 600; flex: 1; }
+.node-stat { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+/* ── Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Color helpers ───────────────────────────────────── */
+.c-green  { color: var(--accent3); }
+.c-yellow { color: var(--warn); }
+.c-red    { color: var(--danger); }
+.c-blue   { color: var(--accent); }
+.c-purple { color: var(--accent2); }
+</style>
+</head>
+<body>
+
+<!-- ── Top Bar ─────────────────────────────────────────────────── -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <div class="brand-dot"></div>
+    <span class="brand-name">Echo<span>Pose</span></span>
+  </div>
+  <div class="topbar-right">
+    <span class="fps-chip" id="m-fps">0 Hz</span>
+    <span class="badge badge-disconnected" id="m-badge">Offline</span>
+  </div>
+</header>
+
+<!-- ── Pages ───────────────────────────────────────────────────── -->
+<div id="pages">
+
+  <!-- ══ Overview Page ══════════════════════════════════════════ -->
+  <section class="page active" id="page-overview">
+
+    <!-- Occupancy hero -->
+    <div class="hero-metric">
+      <div class="hero-icon">👤</div>
+      <div class="hero-info">
+        <div class="hero-label">People Detected</div>
+        <div class="hero-value" id="m-people">0<span class="hero-unit">in room</span></div>
+      </div>
+    </div>
+
+    <!-- Quick metrics grid -->
+    <div class="metrics-grid">
+      <div class="metric-tile">
+        <div class="metric-tile-icon">❤️</div>
+        <div class="metric-tile-label">Heart Rate</div>
+        <div class="metric-tile-value c-red" id="m-hr-quick">--</div>
+        <div class="metric-tile-unit">bpm</div>
+      </div>
+      <div class="metric-tile">
+        <div class="metric-tile-icon">🫁</div>
+        <div class="metric-tile-label">Resp. Rate</div>
+        <div class="metric-tile-value c-blue" id="m-rr-quick">--</div>
+        <div class="metric-tile-unit">br/min</div>
+      </div>
+      <div class="metric-tile">
+        <div class="metric-tile-icon">🏃</div>
+        <div class="metric-tile-label">Activity</div>
+        <div class="metric-tile-value c-purple" id="m-activity-quick" style="font-size:18px">--</div>
+        <div class="metric-tile-unit" id="m-activity-conf-quick"></div>
+      </div>
+      <div class="metric-tile">
+        <div class="metric-tile-icon">🛡️</div>
+        <div class="metric-tile-label">Threat</div>
+        <div class="metric-tile-value c-green" id="m-threat-quick">GREEN</div>
+        <div class="metric-tile-unit">level</div>
+      </div>
+    </div>
+
+    <!-- Health alert banner -->
+    <div class="alert-banner normal" id="m-alert-banner">
+      <div class="alert-banner-icon">✅</div>
+      <div class="alert-banner-text">
+        <div class="alert-banner-level" id="m-alert-level">NORMAL</div>
+        <div class="alert-banner-detail" id="m-alert-detail">No anomalies detected</div>
+      </div>
+    </div>
+
+    <!-- Fall status -->
+    <div class="fall-card">
+      <div class="fall-icon">🛡️</div>
+      <div class="fall-info">
+        <div class="fall-status safe" id="m-fall-status">Safe</div>
+        <div class="fall-detail" id="m-fall-detail">Balance normal · Risk: low</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ Vitals Page ════════════════════════════════════════════ -->
+  <section class="page" id="page-vitals">
+
+    <div class="vital-card">
+      <div class="vital-icon-wrap hr">❤️</div>
+      <div class="vital-info">
+        <div class="vital-name">Heart Rate</div>
+        <div class="vital-reading">
+          <span class="c-red" id="m-hr">--</span>
+          <span class="vital-reading-unit">bpm</span>
+        </div>
+        <div class="vital-status ok" id="m-hr-status">Normal range</div>
+      </div>
+    </div>
+
+    <div class="vital-card">
+      <div class="vital-icon-wrap rr">🫁</div>
+      <div class="vital-info">
+        <div class="vital-name">Respiratory Rate</div>
+        <div class="vital-reading">
+          <span class="c-blue" id="m-rr">--</span>
+          <span class="vital-reading-unit">br/min</span>
+        </div>
+        <div class="vital-status ok" id="m-rr-status">Normal range</div>
+      </div>
+    </div>
+
+    <div class="vital-card">
+      <div class="vital-icon-wrap spo2">💧</div>
+      <div class="vital-info">
+        <div class="vital-name">Blood Oxygen (SpO₂)</div>
+        <div class="vital-reading">
+          <span class="c-purple" id="m-spo2">--</span>
+          <span class="vital-reading-unit">%</span>
+        </div>
+        <div class="vital-status ok" id="m-spo2-status">Normal range</div>
+      </div>
+    </div>
+
+    <div class="vital-card">
+      <div class="vital-icon-wrap temp">🌡️</div>
+      <div class="vital-info">
+        <div class="vital-name">Temperature</div>
+        <div class="vital-reading">
+          <span class="c-yellow" id="m-temp">--</span>
+          <span class="vital-reading-unit">°C</span>
+        </div>
+        <div class="vital-status ok" id="m-temp-status">Normal range</div>
+      </div>
+    </div>
+
+    <div class="vital-card">
+      <div class="vital-icon-wrap bp">📈</div>
+      <div class="vital-info">
+        <div class="vital-name">Blood Pressure</div>
+        <div class="vital-reading">
+          <span class="c-green" id="m-bp">--/--</span>
+          <span class="vital-reading-unit">mmHg</span>
+        </div>
+        <div class="vital-status ok" id="m-bp-status">Normal range</div>
+      </div>
+    </div>
+
+    <div class="stress-card">
+      <div class="stress-header">
+        <span class="stress-title">Stress Level</span>
+        <span class="stress-level" id="m-stress-level">--</span>
+      </div>
+      <div class="stress-bar-track">
+        <div class="stress-bar-fill" id="m-stress-bar" style="width:0%"></div>
+      </div>
+      <div class="stress-score" id="m-stress-score">-- / 100</div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Health Alerts</span>
+        <span class="card-badge" id="m-alert-badge-vitals" style="background:rgba(52,211,153,.15);color:var(--accent3)">NORMAL</span>
+      </div>
+      <div class="card-body" id="m-alert-list-vitals">
+        <div style="color:var(--muted);font-size:13px;">No anomalies detected</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ Tactical Page ══════════════════════════════════════════ -->
+  <section class="page" id="page-tactical">
+
+    <div class="threat-hero">
+      <div class="threat-label">Threat Assessment</div>
+      <div class="threat-level-big green" id="m-threat-big">GREEN</div>
+      <div class="threat-sub" id="m-threat-sub">0 targets · Area clear</div>
+    </div>
+
+    <div class="tac-grid">
+      <div class="tac-tile">
+        <div class="tac-tile-label">Weapon</div>
+        <div class="tac-tile-value c-green" id="m-weapon">UNARMED</div>
+        <div class="tac-tile-sub" id="m-weapon-conf">Conf: --</div>
+      </div>
+      <div class="tac-tile">
+        <div class="tac-tile-label">Concealed</div>
+        <div class="tac-tile-value c-blue" id="m-concealed">0</div>
+        <div class="tac-tile-sub">hidden targets</div>
+      </div>
+      <div class="tac-tile">
+        <div class="tac-tile-label">Crowd</div>
+        <div class="tac-tile-value c-purple" id="m-crowd-count">0</div>
+        <div class="tac-tile-sub" id="m-crowd-density">SPARSE</div>
+      </div>
+      <div class="tac-tile">
+        <div class="tac-tile-label">Anomalies</div>
+        <div class="tac-tile-value c-green" id="m-anomaly-assess">CLEAR</div>
+        <div class="tac-tile-sub" id="m-anomaly-count">0 found</div>
+      </div>
+    </div>
+
+    <div class="intent-bar-card">
+      <div class="intent-header">
+        <span class="intent-title">Behavioral Intent</span>
+        <span class="intent-label c-green" id="m-intent">NORMAL</span>
+      </div>
+      <div class="intent-track">
+        <div class="intent-fill" id="m-intent-bar" style="width:0%"></div>
+      </div>
+      <div class="intent-score" id="m-intent-score">Attack probability: 0%</div>
+    </div>
+
+    <div class="row-card">
+      <div class="row-item">
+        <span class="row-key">Tac Activity</span>
+        <span class="row-val" id="m-tac-activity">--</span>
+      </div>
+      <div class="row-item">
+        <span class="row-key">Body Armor</span>
+        <span class="row-val" id="m-armor">--</span>
+      </div>
+      <div class="row-item">
+        <span class="row-key">Anti-Jam</span>
+        <span class="row-val c-green" id="m-jam-status">CLEAN</span>
+      </div>
+      <div class="row-item">
+        <span class="row-key">Signal SNR</span>
+        <span class="row-val" id="m-snr">-- dB</span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ Activity Page ══════════════════════════════════════════ -->
+  <section class="page" id="page-activity">
+
+    <div class="activity-hero">
+      <div class="activity-label">Current Activity</div>
+      <div class="activity-big" id="m-activity">--</div>
+      <div class="activity-conf" id="m-activity-conf">Confidence: --</div>
+    </div>
+
+    <div class="gait-grid">
+      <div class="gait-tile">
+        <div class="gait-tile-label">Speed</div>
+        <div class="gait-tile-value" id="m-gait-speed">--<span class="gait-tile-unit">m/s</span></div>
+      </div>
+      <div class="gait-tile">
+        <div class="gait-tile-label">Cadence</div>
+        <div class="gait-tile-value" id="m-gait-cadence">--<span class="gait-tile-unit">spm</span></div>
+      </div>
+      <div class="gait-tile">
+        <div class="gait-tile-label">Stride</div>
+        <div class="gait-tile-value" id="m-gait-stride">--<span class="gait-tile-unit">m</span></div>
+      </div>
+      <div class="gait-tile">
+        <div class="gait-tile-label">Symmetry</div>
+        <div class="gait-tile-value" id="m-gait-sym">--%</div>
+      </div>
+    </div>
+
+    <div class="fall-card">
+      <div class="fall-icon" id="m-fall-icon">🛡️</div>
+      <div class="fall-info">
+        <div class="fall-status safe" id="m-fall-status-act">Safe</div>
+        <div class="fall-detail" id="m-fall-detail-act">Risk: low · Balance: --</div>
+      </div>
+    </div>
+
+    <div class="row-card">
+      <div class="row-item">
+        <span class="row-key">Sleep Stage</span>
+        <span class="row-val c-purple" id="m-sleep">--</span>
+      </div>
+      <div class="row-item">
+        <span class="row-key">Left Hand</span>
+        <span class="row-val" id="m-gest-left">idle</span>
+      </div>
+      <div class="row-item">
+        <span class="row-key">Right Hand</span>
+        <span class="row-val" id="m-gest-right">idle</span>
+      </div>
+      <div class="row-item">
+        <span class="row-key">Occupancy</span>
+        <span class="row-val" id="m-occ-status">--</span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══ Settings Page ══════════════════════════════════════════ -->
+  <section class="page" id="page-settings">
+
+    <div class="settings-section">
+      <div class="settings-group-label">Connection</div>
+      <div class="settings-card">
+        <div class="settings-field">
+          <label for="m-ws-uri">Server WebSocket URL</label>
+          <input type="text" id="m-ws-uri" value="ws://localhost:8765/ws/pose" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="settings-field">
+          <label for="m-api-token">API Token (optional)</label>
+          <input type="password" id="m-api-token" placeholder="Leave blank if not configured" autocomplete="off" />
+        </div>
+      </div>
+      <button class="btn-primary" id="m-btn-connect">Connect</button>
+      <button class="btn-danger" id="m-btn-disconnect" style="display:none">Disconnect</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-group-label">Options</div>
+      <div class="settings-card">
+        <div class="settings-toggle">
+          <div class="toggle-info">
+            <div class="toggle-label">Demo Mode</div>
+            <div class="toggle-desc">Simulate live data without a server</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="m-demo-toggle" />
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+        <div class="settings-toggle">
+          <div class="toggle-info">
+            <div class="toggle-label">Keep Screen Awake</div>
+            <div class="toggle-desc">Prevent display sleep while monitoring</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="m-wake-toggle" />
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-group-label">Node Health</div>
+      <div class="node-list" id="m-node-list">
+        <div style="color:var(--muted);font-size:13px;padding:8px 4px;">No nodes detected yet</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;color:var(--muted);font-size:11px;padding:4px 0 8px;">
+      EchoPose Mobile v1.0 · WiFi-CSI Pose Estimation
+    </div>
+
+  </section>
+
+</div>
+
+<!-- ── Bottom Navigation ──────────────────────────────────────── -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-page="overview">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+    </svg>
+    <span>Overview</span>
+    <div class="nav-indicator"></div>
+  </button>
+  <button class="nav-btn" data-page="vitals">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    <span>Vitals</span>
+    <div class="nav-indicator"></div>
+  </button>
+  <button class="nav-btn" data-page="tactical">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    <span>Tactical</span>
+    <div class="nav-indicator"></div>
+  </button>
+  <button class="nav-btn" data-page="activity">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="5" r="3"/>
+      <path d="M12 8v5l3 3M6 14a6 6 0 0 0 12 0"/>
+    </svg>
+    <span>Activity</span>
+    <div class="nav-indicator"></div>
+  </button>
+  <button class="nav-btn" data-page="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+    </svg>
+    <span>Settings</span>
+    <div class="nav-indicator"></div>
+  </button>
+</nav>
+
+<script>
+'use strict';
+
+// ── Navigation ────────────────────────────────────────────────────
+const navBtns = document.querySelectorAll('.nav-btn');
+const pages   = document.querySelectorAll('.page');
+
+navBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.page;
+    navBtns.forEach(b => b.classList.remove('active'));
+    pages.forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`page-${target}`).classList.add('active');
+  });
+});
+
+// ── Helpers ───────────────────────────────────────────────────────
+function set(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(val ?? '--');
+}
+function cls(id, ...classes) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = el.className.replace(/\bc-(green|yellow|red|blue|purple)\b/g, '');
+  classes.forEach(c => el.classList.add(c));
+}
+function fmt(val, digits = 0) {
+  return val != null ? Number(val).toFixed(digits) : '--';
+}
+
+// ── State ─────────────────────────────────────────────────────────
+let ws = null, demoTimer = null, frameCount = 0, lastFpsTs = performance.now();
+let reconnectTimer = null, reconnectAttempts = 0, intendedDisconnect = false;
+let wakeLock = null;
+const badge  = document.getElementById('m-badge');
+const fpsEl  = document.getElementById('m-fps');
+
+function tick() {
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTs >= 1000) {
+    fpsEl.textContent = `${frameCount} Hz`;
+    frameCount = 0;
+    lastFpsTs = now;
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────
+function setConnected(state) {
+  badge.textContent  = state === 'connected' ? 'Live' : state === 'sim' ? 'Demo' : 'Offline';
+  badge.className    = `badge badge-${state === 'connected' ? 'connected' : state === 'sim' ? 'sim' : 'disconnected'}`;
+  document.getElementById('m-btn-connect').style.display    = state === 'connected' ? 'none' : 'block';
+  document.getElementById('m-btn-disconnect').style.display = state === 'connected' ? 'block' : 'none';
+}
+
+function connect(uri) {
+  if (ws) ws.close();
+  ws = new WebSocket(uri);
+
+  ws.onopen = () => {
+    setConnected('connected');
+    reconnectAttempts = 0;
+    clearTimeout(reconnectTimer);
+  };
+
+  ws.onmessage = e => {
+    try { handleFrame(JSON.parse(e.data)); } catch (_) {}
+  };
+
+  ws.onclose = () => {
+    setConnected('disconnected');
+    if (intendedDisconnect) return;
+    reconnectAttempts++;
+    const delay = Math.min(1000 * reconnectAttempts, 10000);
+    reconnectTimer = setTimeout(() => connect(document.getElementById('m-ws-uri').value.trim()), delay);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+document.getElementById('m-btn-connect').addEventListener('click', () => {
+  intendedDisconnect = false;
+  stopDemo();
+  connect(document.getElementById('m-ws-uri').value.trim());
+});
+
+document.getElementById('m-btn-disconnect').addEventListener('click', () => {
+  intendedDisconnect = true;
+  if (ws) ws.close();
+  setConnected('disconnected');
+});
+
+// ── Frame Handler ─────────────────────────────────────────────────
+function handleFrame(data) {
+  tick();
+
+  if (data.analytics) applyAnalytics(data.analytics);
+  if (data.tactical)  applyTactical(data.tactical);
+
+  const occ = data.analytics?.occupancy;
+  if (occ) {
+    const count = occ.count ?? 0;
+    document.getElementById('m-people').innerHTML =
+      `${count}<span class="hero-unit">in room</span>`;
+  }
+}
+
+function applyAnalytics(a) {
+  // Vitals
+  const v = a.vitals || {};
+  const hr   = v.heart_rate?.heart_rate;
+  const rr   = v.respiratory_rate?.respiratory_rate;
+  const spo2 = v.spo2?.spo2;
+  const temp = v.temperature?.temperature;
+  const bp   = v.blood_pressure;
+
+  set('m-hr', fmt(hr));          set('m-hr-quick', fmt(hr));
+  set('m-rr', fmt(rr));          set('m-rr-quick', fmt(rr));
+  set('m-spo2', fmt(spo2));
+  set('m-temp', fmt(temp, 1));
+  set('m-bp', bp ? `${fmt(bp.systolic)}/${fmt(bp.diastolic)}` : '--/--');
+
+  // HR status
+  if (hr != null) {
+    const hrEl = document.getElementById('m-hr-status');
+    if (hr < 50 || hr > 110) { hrEl.textContent = 'Out of normal range'; hrEl.className = 'vital-status alert'; }
+    else if (hr < 60 || hr > 100) { hrEl.textContent = 'Slightly elevated'; hrEl.className = 'vital-status warn'; }
+    else { hrEl.textContent = 'Normal range'; hrEl.className = 'vital-status ok'; }
+  }
+
+  // Activity
+  const act  = a.activity || {};
+  const actName = (act.activity ?? '--').replace(/_/g, ' ').toUpperCase();
+  const actConf = act.confidence != null ? `${fmt(act.confidence * 100)}%` : '--';
+  set('m-activity', actName);          set('m-activity-quick', actName);
+  set('m-activity-conf', `Confidence: ${actConf}`);
+  set('m-activity-conf-quick', actConf);
+
+  // Gait
+  const g = a.gait || {};
+  const speed    = g.speed    != null ? `${fmt(g.speed, 1)}` : '--';
+  const cadence  = g.cadence  != null ? `${fmt(g.cadence, 0)}` : '--';
+  const stride   = g.stride_length != null ? `${fmt(g.stride_length, 2)}` : '--';
+  const sym      = g.symmetry != null ? `${fmt(g.symmetry * 100, 0)}%` : '--%';
+  document.getElementById('m-gait-speed').innerHTML   = `${speed}<span class="gait-tile-unit">m/s</span>`;
+  document.getElementById('m-gait-cadence').innerHTML = `${cadence}<span class="gait-tile-unit">spm</span>`;
+  document.getElementById('m-gait-stride').innerHTML  = `${stride}<span class="gait-tile-unit">m</span>`;
+  document.getElementById('m-gait-sym').textContent   = sym;
+
+  // Fall
+  const fall = a.fall || {};
+  const fell = fall.fall_detected;
+  const risk = (fall.risk_level ?? 'low').toLowerCase();
+  const bal  = fall.balance_score != null ? `${fmt(fall.balance_score * 100, 0)}%` : '--';
+  const fallStatus1 = document.getElementById('m-fall-status');
+  const fallStatus2 = document.getElementById('m-fall-status-act');
+  const fallDetail1 = document.getElementById('m-fall-detail');
+  const fallDetail2 = document.getElementById('m-fall-detail-act');
+  const fallText = fell ? 'FALL DETECTED' : (risk === 'high' ? 'High Risk' : 'Safe');
+  const fallCls  = fell ? 'fallen' : (risk === 'high' ? 'risk' : 'safe');
+  const fallIcon = fell ? '🚨' : (risk === 'high' ? '⚠️' : '🛡️');
+  [fallStatus1, fallStatus2].forEach(el => { el.textContent = fallText; el.className = `fall-status ${fallCls}`; });
+  [fallDetail1, fallDetail2].forEach(el => { el.textContent = `Balance: ${bal} · Risk: ${risk}`; });
+  document.getElementById('m-fall-icon').textContent = fallIcon;
+
+  // Gestures
+  const gest = a.gestures || {};
+  set('m-gest-left',  gest.left_hand  ?? gest.left  ?? 'idle');
+  set('m-gest-right', gest.right_hand ?? gest.right ?? 'idle');
+
+  // Sleep
+  set('m-sleep', (a.sleep?.stage ?? '--').toUpperCase());
+
+  // Occupancy
+  const occ = a.occupancy || {};
+  set('m-occ-status', occ.occupied ? `Yes (${occ.count || 1})` : 'Empty');
+
+  // Emotion / Stress
+  const emo = a.emotion || {};
+  const stressScore = emo.stress_score ?? 0;
+  const stressLevel = (emo.stress_level ?? '--').toUpperCase();
+  set('m-stress-level', stressLevel);
+  set('m-stress-score', `${fmt(stressScore, 0)} / 100`);
+  document.getElementById('m-stress-bar').style.width = `${Math.min(stressScore, 100)}%`;
+
+  // Health alerts
+  const alerts = a.health_alerts || {};
+  const level  = (alerts.alert_level ?? 'NORMAL').toUpperCase();
+  const anom   = alerts.anomalies ?? [];
+  const bannerEl   = document.getElementById('m-alert-banner');
+  const levelEl    = document.getElementById('m-alert-level');
+  const detailEl   = document.getElementById('m-alert-detail');
+  const badgeVitEl = document.getElementById('m-alert-badge-vitals');
+  levelEl.textContent = level;
+  set('m-alert-badge-vitals', level);
+  detailEl.textContent = anom.length ? anom[0] : 'No anomalies detected';
+  bannerEl.className = `alert-banner ${level === 'CRITICAL' ? 'critical' : level === 'WARNING' ? 'warning' : 'normal'}`;
+
+  const alertListEl = document.getElementById('m-alert-list-vitals');
+  alertListEl.innerHTML = '';
+  if (anom.length) {
+    anom.forEach(a => {
+      const div = document.createElement('div');
+      div.style.cssText = 'color:var(--danger);font-size:13px;padding:3px 0;';
+      div.textContent = a;
+      alertListEl.appendChild(div);
+    });
+  } else {
+    const div = document.createElement('div');
+    div.style.cssText = 'color:var(--muted);font-size:13px;';
+    div.textContent = 'No anomalies detected';
+    alertListEl.appendChild(div);
+  }
+}
+
+function applyTactical(t) {
+  // Threat level
+  const tgt = t.targets || {};
+  const threatLevel = (tgt.threat_level ?? 'GREEN').toUpperCase();
+  const threatEl = document.getElementById('m-threat-big');
+  const quickEl  = document.getElementById('m-threat-quick');
+  threatEl.textContent = threatLevel;
+  threatEl.className   = `threat-level-big ${threatLevel.toLowerCase()}`;
+  quickEl.textContent  = threatLevel;
+  quickEl.className    = `metric-tile-value ${threatLevel === 'RED' ? 'c-red' : threatLevel === 'YELLOW' ? 'c-yellow' : 'c-green'}`;
+  set('m-threat-sub', `${tgt.target_count ?? 0} targets detected`);
+
+  // Weapon
+  const weap = t.weapon || {};
+  const wt   = (weap.weapon_type ?? 'UNARMED').toUpperCase();
+  const weapEl = document.getElementById('m-weapon');
+  weapEl.textContent = wt;
+  weapEl.className   = `tac-tile-value ${wt === 'UNARMED' ? 'c-green' : wt === 'HANDGUN' ? 'c-yellow' : 'c-red'}`;
+  set('m-weapon-conf', `Conf: ${weap.confidence != null ? fmt(weap.confidence * 100, 0) + '%' : '--'}`);
+  set('m-armor', weap.body_armor_likelihood != null ? `${fmt(weap.body_armor_likelihood * 100, 0)}%` : '--');
+
+  // Concealment
+  set('m-concealed', t.concealment?.concealed_targets ?? 0);
+
+  // Crowd
+  const crowd = t.crowd || {};
+  set('m-crowd-count', crowd.estimated_count ?? 0);
+  set('m-crowd-density', crowd.density_category ?? 'SPARSE');
+
+  // Anomalies
+  const anom = t.anomalies || {};
+  const assess = (anom.threat_assessment ?? 'CLEAR').toUpperCase();
+  const anomEl = document.getElementById('m-anomaly-assess');
+  anomEl.textContent = assess;
+  anomEl.className   = `tac-tile-value ${assess === 'DANGER' ? 'c-red' : assess === 'SUSPICIOUS' ? 'c-yellow' : 'c-green'}`;
+  set('m-anomaly-count', `${anom.anomalies_found ?? 0} found`);
+
+  // Intent
+  const intent = t.intent || {};
+  const intentLabel = (intent.intent ?? 'NORMAL').toUpperCase();
+  const prob  = (intent.attack_probability ?? 0) * 100;
+  const intentEl = document.getElementById('m-intent');
+  intentEl.textContent = intentLabel;
+  intentEl.className   = `intent-label ${intentLabel === 'ATTACK_IMMINENT' ? 'c-red' : intentLabel !== 'NORMAL' ? 'c-yellow' : 'c-green'}`;
+  document.getElementById('m-intent-bar').style.width = `${Math.min(prob, 100)}%`;
+  set('m-intent-score', `Attack probability: ${fmt(prob, 0)}%`);
+
+  // Tac activity
+  set('m-tac-activity', (t.tactical_activity?.activity ?? '--').replace(/_/g, ' '));
+
+  // Anti-jam
+  const jam = t.anti_jam || {};
+  const jamStatus = jam.under_attack ? 'UNDER ATTACK' : (jam.status ?? 'CLEAN');
+  const jamEl = document.getElementById('m-jam-status');
+  jamEl.textContent = jamStatus;
+  jamEl.className   = `row-val ${jam.under_attack ? 'c-red' : 'c-green'}`;
+  set('m-snr', jam.snr != null ? `${fmt(jam.snr, 1)} dB` : '-- dB');
+}
+
+// ── Demo Mode ─────────────────────────────────────────────────────
+const ACTIVITIES = ['WALKING', 'STANDING', 'SITTING', 'RUNNING', 'LYING DOWN'];
+let demoPhase = 0;
+
+function makeDemoFrame() {
+  demoPhase += 0.05;
+  const hr   = 68 + Math.round(Math.sin(demoPhase) * 8);
+  const rr   = 15 + Math.round(Math.sin(demoPhase * 0.7) * 3);
+  const prob  = Math.max(0, Math.min(1, 0.1 + Math.sin(demoPhase * 0.3) * 0.15));
+  const threat = prob > 0.4 ? 'YELLOW' : 'GREEN';
+  return {
+    analytics: {
+      vitals: {
+        heart_rate:       { heart_rate: hr },
+        respiratory_rate: { respiratory_rate: rr },
+        spo2:             { spo2: 97 + Math.round(Math.sin(demoPhase * 0.4) * 1) },
+        temperature:      { temperature: +(36.6 + Math.sin(demoPhase * 0.2) * 0.3).toFixed(1) },
+        blood_pressure:   { systolic: 118 + Math.round(Math.sin(demoPhase) * 6), diastolic: 76 + Math.round(Math.sin(demoPhase * 0.5) * 4) }
+      },
+      activity: { activity: ACTIVITIES[Math.floor(demoPhase / 4) % ACTIVITIES.length], confidence: 0.85 + Math.random() * 0.1 },
+      gait:    { speed: +(1.1 + Math.sin(demoPhase) * 0.3).toFixed(2), cadence: 108 + Math.round(Math.sin(demoPhase * 0.8) * 10), stride_length: 0.65, symmetry: 0.94 },
+      fall:    { fall_detected: false, risk_level: 'low', balance_score: 0.92 },
+      gestures:{ left_hand: 'idle', right_hand: 'idle' },
+      sleep:   { stage: 'awake', confidence: 0.95 },
+      occupancy:{ occupied: true, count: 1 },
+      emotion: { stress_level: 'low', stress_score: 20 + Math.round(Math.sin(demoPhase) * 15) },
+      health_alerts: { alert_level: 'NORMAL', anomalies: [] }
+    },
+    tactical: {
+      targets:          { threat_level: threat, target_count: 1, targets: [] },
+      weapon:           { weapon_type: 'UNARMED', confidence: 0.95, body_armor_likelihood: 0.05 },
+      concealment:      { concealed_targets: 0, scan_quality: 'good' },
+      crowd:            { estimated_count: 1, density_per_m2: 0.1, density_category: 'SPARSE' },
+      tactical_activity:{ activity: 'STANDING', confidence: 0.88 },
+      anomalies:        { threat_assessment: 'CLEAR', anomalies_found: 0, scan_coverage: '100%' },
+      intent:           { intent: 'NORMAL', attack_probability: prob },
+      anti_jam:         { under_attack: false, status: 'CLEAN', snr: 44 + Math.round(Math.sin(demoPhase * 0.6) * 3) }
+    }
+  };
+}
+
+function startDemo() {
+  if (demoTimer) return;
+  setConnected('sim');
+  demoTimer = setInterval(() => handleFrame(makeDemoFrame()), 100);
+}
+
+function stopDemo() {
+  clearInterval(demoTimer);
+  demoTimer = null;
+}
+
+document.getElementById('m-demo-toggle').addEventListener('change', e => {
+  if (e.target.checked) {
+    intendedDisconnect = true;
+    if (ws) ws.close();
+    startDemo();
+  } else {
+    stopDemo();
+    setConnected('disconnected');
+  }
+});
+
+// ── Wake Lock ─────────────────────────────────────────────────────
+document.getElementById('m-wake-toggle').addEventListener('change', async e => {
+  if (e.target.checked && 'wakeLock' in navigator) {
+    try { wakeLock = await navigator.wakeLock.request('screen'); }
+    catch (_) { e.target.checked = false; }
+  } else if (wakeLock) {
+    await wakeLock.release();
+    wakeLock = null;
+  }
+});
+
+// ── Node Polling ──────────────────────────────────────────────────
+async function pollNodes() {
+  try {
+    const uri  = document.getElementById('m-ws-uri').value.trim();
+    const wsUrl = new URL(uri);
+    const res  = await fetch(`http://${wsUrl.hostname}:3000/nodes`);
+    if (!res.ok) return;
+    const nodes = await res.json();
+    const listEl = document.getElementById('m-node-list');
+    listEl.innerHTML = '';
+    const now = Date.now();
+    for (const [id, stats] of Object.entries(nodes)) {
+      const age    = now - stats.last_seen_ms;
+      const online = age >= 0 && age < 5000;
+      const row    = document.createElement('div');
+      row.className = 'node-row';
+      const dot  = document.createElement('div');
+      dot.className = `node-dot ${online ? 'online' : 'offline'}`;
+      const nid  = document.createElement('div');
+      nid.className = 'node-id';
+      nid.textContent = `Node ${id}`;
+      const stat = document.createElement('div');
+      stat.className = 'node-stat';
+      stat.textContent = `${stats.packet_count} pkts`;
+      row.append(dot, nid, stat);
+      listEl.appendChild(row);
+    }
+    if (!Object.keys(nodes).length) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 4px;">No nodes detected yet</div>';
+    }
+  } catch (_) {}
+}
+setInterval(pollNodes, 2000);
+
+// ── Service Worker ────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ── Auto-connect on load ──────────────────────────────────────────
+connect(document.getElementById('m-ws-uri').value);
+</script>
+</body>
+</html>

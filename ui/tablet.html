@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EchoPose — Command Dashboard</title>
+  <meta name="description" content="EchoPose WiFi-CSI pose estimation — multi-panel command dashboard" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="skeleton.js" defer></script>
+  <script src="heatmap.js"  defer></script>
+  <script src="wasm_bridge.js" defer></script>
+<style>
+/* ================================================================
+   EchoPose — Tablet / Desktop Command Dashboard
+   ================================================================ */
+:root {
+  --bg:        #070b12;
+  --surface:   #0d1520;
+  --surface2:  #121e2e;
+  --surface3:  #192535;
+  --border:    rgba(56,189,248,0.10);
+  --border2:   rgba(56,189,248,0.20);
+  --accent:    #38bdf8;
+  --accent2:   #818cf8;
+  --accent3:   #34d399;
+  --danger:    #f87171;
+  --warn:      #fbbf24;
+  --text:      #dde6f0;
+  --muted:     #6b7f97;
+  --mono:      'JetBrains Mono', monospace;
+  --sans:      'Inter', sans-serif;
+  --sidebar-w: 220px;
+  --sidebar-c: 56px;  /* collapsed width */
+  --topbar-h:  52px;
+  --r:         12px;
+  --shadow:    0 4px 24px rgba(0,0,0,.5);
+  --transition:.22s cubic-bezier(.4,0,.2,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Shell ───────────────────────────────────────────── */
+.shell {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width var(--transition);
+  overflow: hidden;
+  z-index: 10;
+}
+.sidebar.collapsed { width: var(--sidebar-c); }
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.logo-dot {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: #080c14;
+  flex-shrink: 0;
+}
+.logo-text { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.logo-text em { font-style: normal; color: var(--accent); }
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background var(--transition), color var(--transition);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+.nav-item:hover  { background: rgba(56,189,248,.07); color: var(--text); }
+.nav-item.active { background: rgba(56,189,248,.12); color: var(--accent); }
+.nav-item svg    { width: 18px; height: 18px; flex-shrink: 0; }
+.nav-label       { overflow: hidden; text-overflow: ellipsis; }
+
+.nav-section-label {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--muted);
+  padding: 12px 10px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sidebar.collapsed .nav-section-label,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .logo-text { opacity: 0; pointer-events: none; }
+
+.sidebar-bottom {
+  padding: 10px 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.btn-collapse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-family: var(--sans);
+  font-weight: 500;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.btn-collapse:hover { color: var(--text); background: rgba(56,189,248,.06); }
+.btn-collapse svg   { width: 18px; height: 18px; flex-shrink: 0; transition: transform var(--transition); }
+.sidebar.collapsed .btn-collapse svg { transform: rotate(180deg); }
+
+/* ── Main ────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Topbar ──────────────────────────────────────────── */
+.topbar {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 16px;
+}
+.topbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.badge {
+  font-size: 10px; font-weight: 700;
+  padding: 3px 10px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.badge-disconnected { background: rgba(248,113,113,.15); color: var(--danger); border: 1px solid rgba(248,113,113,.3); }
+.badge-connected    { background: rgba(52,211,153,.15);  color: var(--accent3); border: 1px solid rgba(52,211,153,.3); }
+.badge-sim          { background: rgba(251,191,36,.15);  color: var(--warn);    border: 1px solid rgba(251,191,36,.3); }
+
+.chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent3);
+  animation: ping 2s infinite;
+}
+@keyframes ping {
+  0%   { box-shadow: 0 0 0 0 rgba(52,211,153,.7); }
+  70%  { box-shadow: 0 0 0 6px rgba(52,211,153,0); }
+  100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+}
+
+.topbar-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: var(--sans);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background .15s, color .15s;
+}
+.topbar-btn:hover { background: rgba(56,189,248,.1); color: var(--accent); }
+.topbar-btn.demo-active { background: rgba(130,111,248,.15); color: var(--accent2); border-color: var(--accent2); }
+
+/* ── Pages ───────────────────────────────────────────── */
+#pages { flex: 1; overflow: hidden; position: relative; }
+.page {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+.page.active { display: flex; }
+
+/* ── Generic Card ────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.card-title {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted);
+}
+.card-body { padding: 14px 16px; }
+.card-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 999px;
+}
+
+/* ── ═══════════════════ OVERVIEW PAGE ══════════════════ */
+.overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  grid-template-rows: 1fr auto;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+.skeleton-card {
+  grid-row: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-card canvas {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+}
+.axis-overlay {
+  position: absolute; bottom: 12px; left: 12px;
+  display: flex; gap: 6px; pointer-events: none;
+}
+.axis-tag {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px;
+}
+.axis-tag.x { background: rgba(248,113,113,.18); color: #f87171; }
+.axis-tag.y { background: rgba(52,211,153,.18);  color: #34d399; }
+.axis-tag.z { background: rgba(56,189,248,.18);  color: #38bdf8; }
+
+.right-col {
+  grid-row: 1;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; min-height: 0;
+}
+
+/* Mini stat cards */
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.stat-card-label { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px; }
+.stat-card-value { font-size: 28px; font-weight: 800; font-family: var(--mono); line-height: 1; }
+.stat-card-unit  { font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+/* Overview bottom strip */
+.ov-bottom {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.ov-bottom-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.ov-bottom-label { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
+.ov-bottom-big   { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+.ov-bottom-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* ── ═══════════════════ VITALS PAGE ═══════════════════ */
+.vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.vital-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.vital-icon-wrap {
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; flex-shrink: 0;
+}
+.vital-icon-wrap.hr   { background: rgba(248,113,113,.15); }
+.vital-icon-wrap.rr   { background: rgba(56,189,248,.15);  }
+.vital-icon-wrap.spo2 { background: rgba(130,111,248,.15); }
+.vital-icon-wrap.temp { background: rgba(251,191,36,.15);  }
+.vital-icon-wrap.bp   { background: rgba(52,211,153,.15);  }
+.vital-info { flex: 1; min-width: 0; }
+.vital-name { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.vital-value {
+  font-size: 36px; font-weight: 800;
+  font-family: var(--mono); line-height: 1;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.vital-value-unit { font-size: 14px; color: var(--muted); font-weight: 400; }
+.vital-status { font-size: 12px; margin-top: 6px; font-weight: 500; }
+.vital-status.ok   { color: var(--accent3); }
+.vital-status.warn { color: var(--warn); }
+.vital-status.alert{ color: var(--danger); }
+
+/* Sparkline */
+.sparkline-wrap { margin-top: 10px; }
+canvas.sparkline { width: 100%; height: 36px; display: block; }
+
+/* Stress card */
+.stress-full {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+  grid-column: 1 / -1;
+}
+.stress-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.stress-title  { font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+.stress-level  { font-size: 18px; font-weight: 700; }
+.stress-track  { background: var(--surface2); border-radius: 999px; height: 10px; overflow: hidden; }
+.stress-fill   { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent3), var(--warn), var(--danger)); transition: width .5s; }
+.stress-score  { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 8px; }
+
+/* Alert card */
+.alerts-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  grid-column: 1 / -1;
+  overflow: hidden;
+}
+.alert-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+.alert-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: rgba(248,113,113,.07);
+  border: 1px solid rgba(248,113,113,.2);
+  border-radius: 8px;
+  font-size: 13px; color: var(--danger);
+}
+
+/* ── ═══════════════════ TACTICAL PAGE ══════════════════ */
+.tac-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+.tac-left { display: flex; flex-direction: column; gap: 12px; }
+.tac-right { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+
+.threat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px 20px;
+  text-align: center;
+}
+.threat-lbl  { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
+.threat-big  { font-size: 56px; font-weight: 900; line-height: 1; transition: color .3s; }
+.threat-big.green  { color: var(--accent3); }
+.threat-big.yellow { color: var(--warn); }
+.threat-big.red    { color: var(--danger); animation: pulse-r 1s infinite; }
+@keyframes pulse-r  { 0%,100%{opacity:1} 50%{opacity:.5} }
+.threat-count { font-size: 14px; color: var(--muted); margin-top: 10px; font-family: var(--mono); }
+
+.tac-kv-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.tac-kv-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.tac-kv-row:last-child { border-bottom: none; }
+.tac-kv-key { color: var(--muted); }
+.tac-kv-val { font-family: var(--mono); font-weight: 600; }
+
+.intent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px 16px;
+}
+.intent-top  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.intent-lbl  { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.intent-val  { font-size: 18px; font-weight: 700; }
+.intent-track{ background: var(--surface2); border-radius: 999px; height: 10px; overflow: hidden; }
+.intent-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent3), var(--warn), var(--danger)); transition: width .5s; }
+.intent-pct  { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 6px; }
+
+.tac-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.tac-mini {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+}
+.tac-mini-lbl { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
+.tac-mini-val { font-size: 24px; font-weight: 800; font-family: var(--mono); }
+.tac-mini-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* ── ═══════════════════ ACTIVITY PAGE ══════════════════ */
+.act-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.act-hero {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.act-hero-info { }
+.act-hero-lbl { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.act-hero-big { font-size: 48px; font-weight: 900; color: var(--accent); letter-spacing: -.02em; }
+.act-hero-conf{ font-size: 14px; color: var(--muted); margin-top: 6px; }
+.act-hero-right {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  min-width: 300px;
+}
+.act-stat {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.act-stat-lbl { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+.act-stat-val { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+.act-stat-unit{ font-size: 11px; color: var(--muted); }
+
+.full-card {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.kv-table { width: 100%; }
+.kv-table tr { border-bottom: 1px solid var(--border); }
+.kv-table tr:last-child { border-bottom: none; }
+.kv-table td { padding: 12px 16px; font-size: 13px; }
+.kv-table td:first-child { color: var(--muted); width: 40%; }
+.kv-table td:last-child { font-family: var(--mono); font-weight: 600; }
+
+/* Fall card */
+.fall-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.fall-icon { font-size: 40px; }
+.fall-info { flex: 1; }
+.fall-label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px; }
+.fall-status { font-size: 24px; font-weight: 700; }
+.fall-status.safe   { color: var(--accent3); }
+.fall-status.risk   { color: var(--warn); }
+.fall-status.fallen { color: var(--danger); animation: pulse-r 1s infinite; }
+.fall-detail { font-size: 12px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+
+/* ── ═══════════════════ NODES PAGE ═════════════════════ */
+.nodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.node-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.node-header { display: flex; align-items: center; gap: 10px; }
+.node-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.node-dot.online  { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
+.node-dot.offline { background: var(--danger); }
+.node-id { font-family: var(--mono); font-size: 15px; font-weight: 700; flex: 1; }
+.node-status { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.node-status.online  { background: rgba(52,211,153,.15);  color: var(--accent3); }
+.node-status.offline { background: rgba(248,113,113,.15); color: var(--danger); }
+.node-stats { display: flex; flex-direction: column; gap: 4px; }
+.node-stat-row { display: flex; justify-content: space-between; font-size: 12px; }
+.node-stat-key { color: var(--muted); }
+.node-stat-val { font-family: var(--mono); font-weight: 500; }
+
+/* Heatmap card */
+.heatmap-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.heatmap-select {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; padding: 4px 8px;
+  font-size: 12px; font-family: var(--sans);
+}
+#t-heatmap-canvas { width: 100% !important; height: auto !important; display: block; }
+
+/* Metrics chart */
+#t-metrics-canvas { width: 100% !important; display: block; }
+
+/* ── ═══════════════════ SETTINGS PAGE ══════════════════ */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-content: start;
+}
+.settings-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.settings-card.full { grid-column: 1 / -1; }
+.settings-field {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings-field:last-child { border-bottom: none; }
+.settings-field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.settings-field input, .settings-field select {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px;
+  padding: 9px 12px; font-family: var(--mono); font-size: 13px;
+  width: 100%; outline: none;
+}
+.settings-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,.1); }
+.settings-toggle {
+  padding: 14px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.settings-toggle:last-child { border-bottom: none; }
+.toggle-label { font-size: 14px; font-weight: 500; }
+.toggle-desc  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.toggle-switch { position: relative; width: 44px; height: 26px; flex-shrink: 0; }
+.toggle-switch input { display: none; }
+.toggle-track {
+  position: absolute; inset: 0;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 999px; cursor: pointer; transition: background .2s;
+}
+.toggle-switch input:checked + .toggle-track { background: var(--accent); border-color: var(--accent); }
+.toggle-thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--muted); transition: left .2s, background .2s;
+}
+.toggle-switch input:checked ~ .toggle-thumb { left: 21px; background: var(--bg); }
+.btn-primary {
+  background: var(--accent); color: var(--bg);
+  border: none; border-radius: 8px;
+  padding: 11px 20px; font-size: 14px; font-weight: 700;
+  font-family: var(--sans); cursor: pointer; transition: opacity .15s;
+}
+.btn-primary:hover { opacity: .88; }
+.btn-outline {
+  background: transparent; color: var(--danger);
+  border: 1px solid rgba(248,113,113,.4);
+  border-radius: 8px; padding: 11px 20px;
+  font-size: 14px; font-weight: 700;
+  font-family: var(--sans); cursor: pointer; transition: background .15s;
+}
+.btn-outline:hover { background: rgba(248,113,113,.08); }
+.settings-actions { display: flex; gap: 10px; padding: 14px 16px; }
+
+/* ── Scrollbars ──────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+/* ── Color helpers ───────────────────────────────────── */
+.c-green  { color: var(--accent3) !important; }
+.c-yellow { color: var(--warn)    !important; }
+.c-red    { color: var(--danger)  !important; }
+.c-blue   { color: var(--accent)  !important; }
+.c-purple { color: var(--accent2) !important; }
+
+/* ── Responsive tablet adjustments ──────────────────── */
+@media (max-width: 900px) {
+  .vitals-grid { grid-template-columns: 1fr 1fr; }
+  .tac-layout  { grid-template-columns: 1fr; }
+  .tac-grid-3  { grid-template-columns: 1fr 1fr; }
+  .settings-layout { grid-template-columns: 1fr; }
+  .act-hero { flex-direction: column; align-items: flex-start; }
+  .act-hero-right { min-width: unset; width: 100%; }
+}
+@media (max-width: 680px) {
+  :root { --sidebar-w: var(--sidebar-c); }
+  .vitals-grid { grid-template-columns: 1fr; }
+  .tac-grid-3  { grid-template-columns: 1fr; }
+  .ov-bottom   { grid-template-columns: 1fr 1fr; }
+  .act-hero-right { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-dot">EP</div>
+      <span class="logo-text">Echo<em>Pose</em></span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Monitor</div>
+      <button class="nav-item active" data-page="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        <span class="nav-label">Overview</span>
+      </button>
+      <button class="nav-item" data-page="vitals">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        <span class="nav-label">Vitals</span>
+      </button>
+      <button class="nav-item" data-page="activity">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="5" r="3"/><path d="M12 8v5l3 3M6 14a6 6 0 0 0 12 0"/>
+        </svg>
+        <span class="nav-label">Activity</span>
+      </button>
+
+      <div class="nav-section-label">Tactical</div>
+      <button class="nav-item" data-page="tactical">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span class="nav-label">Tactical</span>
+      </button>
+
+      <div class="nav-section-label">System</div>
+      <button class="nav-item" data-page="nodes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="2"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/>
+          <circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/>
+          <line x1="6" y1="6" x2="10" y2="11"/><line x1="18" y1="6" x2="14" y2="11"/>
+          <line x1="6" y1="18" x2="10" y2="13"/><line x1="18" y1="18" x2="14" y2="13"/>
+        </svg>
+        <span class="nav-label">Nodes</span>
+      </button>
+      <button class="nav-item" data-page="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span class="nav-label">Settings</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <button class="btn-collapse" id="btn-collapse">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        <span class="nav-label">Collapse</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main ─────────────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <span class="topbar-title" id="t-page-title">Overview</span>
+      <div class="topbar-right">
+        <div class="chip">
+          <div class="chip-dot" id="t-chip-dot" style="background:var(--danger);animation:none"></div>
+          <span id="t-fps">0 Hz</span>
+        </div>
+        <div class="chip" id="t-nodes-chip">
+          <span id="t-node-count">0</span>&nbsp;nodes
+        </div>
+        <span class="badge badge-disconnected" id="t-badge">Offline</span>
+        <button class="topbar-btn" id="t-btn-demo">Demo</button>
+        <button class="topbar-btn" id="t-btn-connect" style="background:rgba(56,189,248,.12);color:var(--accent)">Connect</button>
+      </div>
+    </header>
+
+    <!-- Pages -->
+    <div id="pages">
+
+      <!-- ════ OVERVIEW ════════════════════════════════════ -->
+      <div class="page active" id="page-overview">
+        <div class="overview-grid" style="flex:1;min-height:0;">
+          <!-- 3D Skeleton -->
+          <div class="skeleton-card">
+            <div class="card-header">
+              <span class="card-title">3D Pose Skeleton</span>
+              <div style="display:flex;gap:6px;">
+                <button class="topbar-btn" id="t-btn-rotate" style="padding:4px 10px;font-size:12px;">Rotate</button>
+                <button class="topbar-btn" id="t-btn-reset"  style="padding:4px 10px;font-size:12px;">Reset</button>
+                <button class="topbar-btn" id="t-btn-localize" style="padding:4px 10px;font-size:12px;color:var(--accent);">Localize</button>
+              </div>
+            </div>
+            <canvas id="t-skeleton-canvas"></canvas>
+            <div class="axis-overlay">
+              <span class="axis-tag x">X</span>
+              <span class="axis-tag y">Y</span>
+              <span class="axis-tag z">Z</span>
+            </div>
+          </div>
+
+          <!-- Right column -->
+          <div class="right-col">
+            <!-- People / Activity quick stats -->
+            <div class="stat-row">
+              <div class="stat-card">
+                <div class="stat-card-label">People</div>
+                <div class="stat-card-value c-blue" id="t-people">0<span class="stat-card-unit">in room</span></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-card-label">Threat</div>
+                <div class="stat-card-value c-green" id="t-threat-quick">GREEN</div>
+              </div>
+            </div>
+            <div class="stat-row">
+              <div class="stat-card">
+                <div class="stat-card-label">Heart Rate</div>
+                <div class="stat-card-value c-red" id="t-hr-quick">--<span class="stat-card-unit">bpm</span></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-card-label">SpO₂</div>
+                <div class="stat-card-value c-purple" id="t-spo2-quick">--<span class="stat-card-unit">%</span></div>
+              </div>
+            </div>
+
+            <!-- CSI Heatmap -->
+            <div class="heatmap-card">
+              <div class="card-header">
+                <span class="card-title">CSI Subcarrier Heatmap</span>
+                <select class="heatmap-select" id="t-heatmap-node">
+                  <option value="0">Node 0</option>
+                  <option value="1">Node 1</option>
+                  <option value="2">Node 2</option>
+                </select>
+              </div>
+              <canvas id="t-heatmap-canvas" width="320" height="130"></canvas>
+            </div>
+
+            <!-- Signal metrics -->
+            <div class="card">
+              <div class="card-header"><span class="card-title">Signal Quality</span></div>
+              <canvas id="t-metrics-canvas" width="320" height="100"></canvas>
+            </div>
+          </div>
+
+          <!-- Bottom strip -->
+          <div class="ov-bottom">
+            <div class="ov-bottom-card">
+              <div class="ov-bottom-label">Activity</div>
+              <div class="ov-bottom-big c-blue" id="t-act-quick">--</div>
+              <div class="ov-bottom-sub" id="t-act-conf-quick"></div>
+            </div>
+            <div class="ov-bottom-card">
+              <div class="ov-bottom-label">Fall Status</div>
+              <div class="ov-bottom-big c-green" id="t-fall-quick">Safe</div>
+              <div class="ov-bottom-sub" id="t-fall-risk-quick">Risk: low</div>
+            </div>
+            <div class="ov-bottom-card">
+              <div class="ov-bottom-label">Sleep Stage</div>
+              <div class="ov-bottom-big c-purple" id="t-sleep-quick">--</div>
+              <div class="ov-bottom-sub" id="t-sleep-conf-quick"></div>
+            </div>
+            <div class="ov-bottom-card">
+              <div class="ov-bottom-label">Stress</div>
+              <div class="ov-bottom-big c-yellow" id="t-stress-quick">--</div>
+              <div class="ov-bottom-sub" id="t-stress-score-quick">-- / 100</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ VITALS ══════════════════════════════════════ -->
+      <div class="page" id="page-vitals">
+        <div class="vitals-grid">
+
+          <div class="vital-card">
+            <div class="vital-icon-wrap hr">❤️</div>
+            <div class="vital-info">
+              <div class="vital-name">Heart Rate</div>
+              <div class="vital-value"><span class="c-red" id="t-hr">--</span><span class="vital-value-unit">bpm</span></div>
+              <div class="vital-status ok" id="t-hr-status">Normal</div>
+              <div class="sparkline-wrap"><canvas class="sparkline" id="t-hr-spark" height="36"></canvas></div>
+            </div>
+          </div>
+
+          <div class="vital-card">
+            <div class="vital-icon-wrap rr">🫁</div>
+            <div class="vital-info">
+              <div class="vital-name">Respiratory Rate</div>
+              <div class="vital-value"><span class="c-blue" id="t-rr">--</span><span class="vital-value-unit">br/min</span></div>
+              <div class="vital-status ok" id="t-rr-status">Normal</div>
+              <div class="sparkline-wrap"><canvas class="sparkline" id="t-rr-spark" height="36"></canvas></div>
+            </div>
+          </div>
+
+          <div class="vital-card">
+            <div class="vital-icon-wrap spo2">💧</div>
+            <div class="vital-info">
+              <div class="vital-name">Blood Oxygen (SpO₂)</div>
+              <div class="vital-value"><span class="c-purple" id="t-spo2">--</span><span class="vital-value-unit">%</span></div>
+              <div class="vital-status ok" id="t-spo2-status">Normal</div>
+              <div class="sparkline-wrap"><canvas class="sparkline" id="t-spo2-spark" height="36"></canvas></div>
+            </div>
+          </div>
+
+          <div class="vital-card">
+            <div class="vital-icon-wrap temp">🌡️</div>
+            <div class="vital-info">
+              <div class="vital-name">Temperature</div>
+              <div class="vital-value"><span class="c-yellow" id="t-temp">--</span><span class="vital-value-unit">°C</span></div>
+              <div class="vital-status ok" id="t-temp-status">Normal</div>
+            </div>
+          </div>
+
+          <div class="vital-card">
+            <div class="vital-icon-wrap bp">📈</div>
+            <div class="vital-info">
+              <div class="vital-name">Blood Pressure</div>
+              <div class="vital-value"><span class="c-green" id="t-bp">--/--</span><span class="vital-value-unit">mmHg</span></div>
+              <div class="vital-status ok" id="t-bp-status">Normal</div>
+            </div>
+          </div>
+
+          <div class="vital-card" style="flex-direction:column;gap:0;padding:0;overflow:hidden;">
+            <div class="card-header"><span class="card-title">Stress Level</span></div>
+            <div style="padding:20px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                <span style="font-size:13px;color:var(--muted);">Stress Index</span>
+                <span style="font-size:22px;font-weight:800;" id="t-stress-level">--</span>
+              </div>
+              <div class="stress-track"><div class="stress-fill" id="t-stress-bar" style="width:0%"></div></div>
+              <div class="stress-score" id="t-stress-score">-- / 100</div>
+            </div>
+          </div>
+
+          <div class="alerts-card" style="grid-column:1/-1;">
+            <div class="card-header">
+              <span class="card-title">Health Alerts</span>
+              <span class="card-badge" id="t-alert-badge" style="background:rgba(52,211,153,.15);color:var(--accent3);border:1px solid rgba(52,211,153,.3)">NORMAL</span>
+            </div>
+            <div class="alert-list" id="t-alert-list">
+              <div style="color:var(--muted);font-size:13px;">No anomalies detected</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ════ TACTICAL ════════════════════════════════════ -->
+      <div class="page" id="page-tactical">
+        <div class="tac-layout" style="flex:1;min-height:0;">
+
+          <div class="tac-left">
+            <!-- Threat level -->
+            <div class="threat-card">
+              <div class="threat-lbl">Threat Assessment</div>
+              <div class="threat-big green" id="t-threat-big">GREEN</div>
+              <div class="threat-count" id="t-threat-count">0 targets in area</div>
+            </div>
+
+            <!-- Intent -->
+            <div class="intent-card">
+              <div class="intent-top">
+                <span class="intent-lbl">Behavioral Intent</span>
+                <span class="intent-val c-green" id="t-intent">NORMAL</span>
+              </div>
+              <div class="intent-track">
+                <div class="intent-fill" id="t-intent-bar" style="width:0%"></div>
+              </div>
+              <div class="intent-pct" id="t-intent-pct">Attack probability: 0%</div>
+            </div>
+
+            <!-- Anti-jam -->
+            <div class="tac-kv-card">
+              <div class="card-header"><span class="card-title">Signal Defense</span></div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Anti-Jam Status</span>
+                <span class="tac-kv-val c-green" id="t-jam-status">CLEAN</span>
+              </div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Signal SNR</span>
+                <span class="tac-kv-val" id="t-snr">-- dB</span>
+              </div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Scan Coverage</span>
+                <span class="tac-kv-val" id="t-scan-coverage">--</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tac-right">
+            <!-- Top grid: weapon, concealment, crowd -->
+            <div class="tac-grid-3">
+              <div class="tac-mini">
+                <div class="tac-mini-lbl">Weapon Detected</div>
+                <div class="tac-mini-val c-green" id="t-weapon">UNARMED</div>
+                <div class="tac-mini-sub" id="t-weapon-conf">Conf: --</div>
+              </div>
+              <div class="tac-mini">
+                <div class="tac-mini-lbl">Concealed Targets</div>
+                <div class="tac-mini-val c-blue" id="t-concealed">0</div>
+                <div class="tac-mini-sub" id="t-scan-quality">Quality: --</div>
+              </div>
+              <div class="tac-mini">
+                <div class="tac-mini-lbl">Crowd Count</div>
+                <div class="tac-mini-val c-purple" id="t-crowd">0</div>
+                <div class="tac-mini-sub" id="t-crowd-density">SPARSE</div>
+              </div>
+            </div>
+
+            <!-- Anomaly scanner -->
+            <div class="tac-kv-card">
+              <div class="card-header"><span class="card-title">Anomaly Scanner</span></div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Threat Assessment</span>
+                <span class="tac-kv-val c-green" id="t-anomaly-assess">CLEAR</span>
+              </div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Anomalies Found</span>
+                <span class="tac-kv-val" id="t-anomaly-count">0</span>
+              </div>
+            </div>
+
+            <!-- Tactical details -->
+            <div class="tac-kv-card">
+              <div class="card-header"><span class="card-title">Tactical Detail</span></div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Tactical Activity</span>
+                <span class="tac-kv-val" id="t-tac-activity">--</span>
+              </div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Activity Conf.</span>
+                <span class="tac-kv-val" id="t-tac-conf">--</span>
+              </div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Body Armor</span>
+                <span class="tac-kv-val" id="t-armor">--</span>
+              </div>
+              <div class="tac-kv-row">
+                <span class="tac-kv-key">Target Type</span>
+                <span class="tac-kv-val" id="t-target-type">--</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ════ ACTIVITY ════════════════════════════════════ -->
+      <div class="page" id="page-activity">
+        <div class="act-grid">
+
+          <!-- Activity hero -->
+          <div class="act-hero">
+            <div class="act-hero-info">
+              <div class="act-hero-lbl">Current Activity</div>
+              <div class="act-hero-big" id="t-activity">--</div>
+              <div class="act-hero-conf" id="t-activity-conf">Confidence: --</div>
+            </div>
+            <div class="act-hero-right">
+              <div class="act-stat">
+                <div class="act-stat-lbl">Speed</div>
+                <div class="act-stat-val" id="t-gait-speed">--<span class="act-stat-unit"> m/s</span></div>
+              </div>
+              <div class="act-stat">
+                <div class="act-stat-lbl">Cadence</div>
+                <div class="act-stat-val" id="t-gait-cadence">--<span class="act-stat-unit"> spm</span></div>
+              </div>
+              <div class="act-stat">
+                <div class="act-stat-lbl">Stride</div>
+                <div class="act-stat-val" id="t-gait-stride">--<span class="act-stat-unit"> m</span></div>
+              </div>
+              <div class="act-stat">
+                <div class="act-stat-lbl">Symmetry</div>
+                <div class="act-stat-val" id="t-gait-sym">--%</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fall -->
+          <div class="fall-card">
+            <div class="fall-icon" id="t-fall-icon">🛡️</div>
+            <div class="fall-info">
+              <div class="fall-label">Fall Detection</div>
+              <div class="fall-status safe" id="t-fall-status">Safe</div>
+              <div class="fall-detail" id="t-fall-detail">Balance: -- · Risk: low</div>
+            </div>
+          </div>
+
+          <!-- Gestures & Sleep -->
+          <div class="full-card">
+            <div class="card-header"><span class="card-title">Gestures &amp; Sleep</span></div>
+            <table class="kv-table">
+              <tr><td>Left Hand</td><td id="t-gest-left">idle</td></tr>
+              <tr><td>Right Hand</td><td id="t-gest-right">idle</td></tr>
+              <tr><td>Sleep Stage</td><td id="t-sleep-stage">--</td></tr>
+              <tr><td>Sleep Confidence</td><td id="t-sleep-conf">--</td></tr>
+            </table>
+          </div>
+
+          <!-- Occupancy -->
+          <div class="full-card" style="grid-column:unset;">
+            <div class="card-header"><span class="card-title">Occupancy</span></div>
+            <table class="kv-table">
+              <tr><td>Status</td><td id="t-occ-status">--</td></tr>
+              <tr><td>People Count</td><td id="t-occ-count">0</td></tr>
+            </table>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ════ NODES ════════════════════════════════════════ -->
+      <div class="page" id="page-nodes">
+        <div class="nodes-grid" id="t-nodes-grid">
+          <div style="color:var(--muted);font-size:13px;padding:4px;">Loading node data…</div>
+        </div>
+      </div>
+
+      <!-- ════ SETTINGS ════════════════════════════════════ -->
+      <div class="page" id="page-settings">
+        <div class="settings-layout">
+
+          <div class="settings-card">
+            <div class="card-header"><span class="card-title">Connection</span></div>
+            <div class="settings-field">
+              <label for="t-ws-uri">Inference WebSocket URL</label>
+              <input type="text" id="t-ws-uri" value="ws://localhost:8765/ws/pose" spellcheck="false" />
+            </div>
+            <div class="settings-field">
+              <label for="t-api-token">API Token</label>
+              <input type="password" id="t-api-token" placeholder="Leave blank if not configured" />
+            </div>
+            <div class="settings-actions">
+              <button class="btn-primary" id="t-btn-connect-form">Connect</button>
+              <button class="btn-outline" id="t-btn-disconnect-form">Disconnect</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="card-header"><span class="card-title">Display Options</span></div>
+            <div class="settings-toggle">
+              <div>
+                <div class="toggle-label">Demo Mode</div>
+                <div class="toggle-desc">Simulate live data without a server</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="t-demo-toggle" />
+                <div class="toggle-track"></div>
+                <div class="toggle-thumb"></div>
+              </label>
+            </div>
+            <div class="settings-toggle">
+              <div>
+                <div class="toggle-label">Auto-Rotate 3D</div>
+                <div class="toggle-desc">Continuously rotate the skeleton view</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="t-auto-rotate" />
+                <div class="toggle-track"></div>
+                <div class="toggle-thumb"></div>
+              </label>
+            </div>
+            <div class="settings-toggle">
+              <div>
+                <div class="toggle-label">Show Tactical Panel</div>
+                <div class="toggle-desc">Display tactical data in overview</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="t-show-tactical" checked />
+                <div class="toggle-track"></div>
+                <div class="toggle-thumb"></div>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-card settings-full">
+            <div class="card-header"><span class="card-title">About</span></div>
+            <div class="settings-field" style="flex-direction:row;align-items:center;justify-content:space-between;">
+              <label style="color:var(--text)">EchoPose Command Dashboard</label>
+              <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">v2.0</span>
+            </div>
+            <div class="settings-field" style="flex-direction:row;align-items:center;justify-content:space-between;">
+              <label style="color:var(--text)">WiFi-CSI Pose Estimation</label>
+              <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">RF-Mesh</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div><!-- /pages -->
+  </div><!-- /main -->
+
+</div><!-- /shell -->
+
+<script>
+'use strict';
+
+// ── Navigation ────────────────────────────────────────────────────
+const NAV_TITLES = {
+  overview: 'Overview', vitals: 'Vitals', activity: 'Activity',
+  tactical: 'Tactical', nodes: 'Nodes', settings: 'Settings'
+};
+
+document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const page = btn.dataset.page;
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`page-${page}`).classList.add('active');
+    document.getElementById('t-page-title').textContent = NAV_TITLES[page] ?? page;
+  });
+});
+
+// ── Sidebar collapse ──────────────────────────────────────────────
+const sidebar = document.getElementById('sidebar');
+document.getElementById('btn-collapse').addEventListener('click', () => {
+  sidebar.classList.toggle('collapsed');
+});
+
+// ── Helpers ───────────────────────────────────────────────────────
+function set(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(val ?? '--');
+}
+function fmt(v, d = 0) { return v != null ? Number(v).toFixed(d) : '--'; }
+
+// ── Sparkline system ──────────────────────────────────────────────
+const sparkBuffers = {};
+const SPARK_LEN = 60;
+
+function pushSpark(id, val) {
+  if (val == null) return;
+  if (!sparkBuffers[id]) sparkBuffers[id] = [];
+  sparkBuffers[id].push(val);
+  if (sparkBuffers[id].length > SPARK_LEN) sparkBuffers[id].shift();
+  drawSpark(id);
+}
+
+function drawSpark(id) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const buf = sparkBuffers[id] || [];
+  if (!buf.length) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth * devicePixelRatio;
+  const H = canvas.offsetHeight * devicePixelRatio;
+  canvas.width = W; canvas.height = H;
+  const min = Math.min(...buf), max = Math.max(...buf);
+  const range = (max - min) || 1;
+  ctx.clearRect(0, 0, W, H);
+  // gradient fill
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(56,189,248,.35)');
+  grad.addColorStop(1, 'rgba(56,189,248,0)');
+  ctx.beginPath();
+  buf.forEach((v, i) => {
+    const x = (i / (SPARK_LEN - 1)) * W;
+    const y = H - ((v - min) / range) * H * 0.85 - H * 0.05;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  const last = buf[buf.length - 1];
+  const lx = W, ly = H - ((last - min) / range) * H * 0.85 - H * 0.05;
+  ctx.lineTo(lx, ly); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+  // line
+  ctx.beginPath();
+  buf.forEach((v, i) => {
+    const x = (i / (SPARK_LEN - 1)) * W;
+    const y = H - ((v - min) / range) * H * 0.85 - H * 0.05;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2 * devicePixelRatio;
+  ctx.lineJoin = 'round'; ctx.stroke();
+}
+
+// ── WebSocket state ───────────────────────────────────────────────
+let ws = null, frameCount = 0, lastFpsTs = performance.now();
+let reconnectTimer = null, reconnectAttempts = 0, intendedDisconnect = false;
+let demoTimer = null, autoRotate = false, demoPhase = 0;
+
+const badge    = document.getElementById('t-badge');
+const fpsEl    = document.getElementById('t-fps');
+const chipDot  = document.getElementById('t-chip-dot');
+
+function tick() {
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTs >= 1000) {
+    fpsEl.textContent = `${frameCount} Hz`;
+    frameCount = 0;
+    lastFpsTs = now;
+  }
+}
+
+function setConnected(state) {
+  badge.textContent = state === 'connected' ? 'Live' : state === 'sim' ? 'Demo' : 'Offline';
+  badge.className   = `badge badge-${state === 'connected' ? 'connected' : state === 'sim' ? 'sim' : 'disconnected'}`;
+  chipDot.style.background  = state === 'connected' ? 'var(--accent3)' : state === 'sim' ? 'var(--warn)' : 'var(--danger)';
+  chipDot.style.animation   = state !== 'disconnected' ? '' : 'none';
+}
+
+function connect(uri) {
+  if (ws) ws.close();
+  ws = new WebSocket(uri);
+  ws.onopen  = () => { setConnected('connected'); reconnectAttempts = 0; clearTimeout(reconnectTimer); };
+  ws.onmessage = e => { try { handleFrame(JSON.parse(e.data)); } catch (_) {} };
+  ws.onclose = () => {
+    setConnected('disconnected');
+    if (intendedDisconnect) return;
+    reconnectAttempts++;
+    const delay = Math.min(1000 * reconnectAttempts, 10000);
+    reconnectTimer = setTimeout(() => connect(document.getElementById('t-ws-uri').value.trim()), delay);
+  };
+  ws.onerror = () => ws.close();
+}
+
+document.getElementById('t-btn-connect').addEventListener('click', () => openSettings());
+document.getElementById('t-btn-connect-form').addEventListener('click', () => {
+  intendedDisconnect = false; stopDemo();
+  connect(document.getElementById('t-ws-uri').value.trim());
+});
+document.getElementById('t-btn-disconnect-form').addEventListener('click', () => {
+  intendedDisconnect = true;
+  if (ws) ws.close();
+  setConnected('disconnected');
+});
+
+function openSettings() {
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelector('.nav-item[data-page="settings"]').classList.add('active');
+  document.getElementById('page-settings').classList.add('active');
+  document.getElementById('t-page-title').textContent = 'Settings';
+}
+
+// ── 3D Skeleton / Heatmap (uses skeleton.js / heatmap.js) ─────────
+let skeletonRenderer = null;
+let heatmapRenderer  = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof SkeletonRenderer !== 'undefined') {
+    skeletonRenderer = new SkeletonRenderer('t-skeleton-canvas');
+  }
+  if (typeof CsiHeatmap !== 'undefined') {
+    heatmapRenderer = new CsiHeatmap('t-heatmap-canvas', 't-heatmap-node');
+  }
+});
+
+document.getElementById('t-btn-rotate').addEventListener('click', () => {
+  autoRotate = !autoRotate;
+  if (skeletonRenderer?.setAutoRotate) skeletonRenderer.setAutoRotate(autoRotate);
+  document.getElementById('t-btn-rotate').style.color = autoRotate ? 'var(--accent)' : '';
+});
+document.getElementById('t-btn-reset').addEventListener('click', () => {
+  if (skeletonRenderer?.resetCamera) skeletonRenderer.resetCamera();
+  autoRotate = false;
+});
+document.getElementById('t-btn-localize').addEventListener('click', () => fetchLocalize());
+document.getElementById('t-auto-rotate').addEventListener('change', e => {
+  autoRotate = e.target.checked;
+  if (skeletonRenderer?.setAutoRotate) skeletonRenderer.setAutoRotate(autoRotate);
+});
+
+async function fetchLocalize() {
+  try {
+    const uri = document.getElementById('t-ws-uri').value.trim();
+    const wsUrl = new URL(uri);
+    const res = await fetch(`http://${wsUrl.hostname}:3000/localize`);
+    if (!res.ok) return;
+    const coords = await res.json();
+    if (skeletonRenderer?.updateNodes) skeletonRenderer.updateNodes(coords);
+  } catch (_) {}
+}
+
+// ── Frame Handler ─────────────────────────────────────────────────
+function handleFrame(data) {
+  tick();
+  if (data.simulation) setConnected('sim');
+
+  if (data.skeletons && skeletonRenderer) {
+    skeletonRenderer.updateSkeletons(data.skeletons);
+  }
+  if (data.amplitudes && heatmapRenderer) {
+    heatmapRenderer.push(data.amplitudes);
+  }
+
+  if (data.analytics) applyAnalytics(data.analytics);
+  if (data.tactical)  applyTactical(data.tactical);
+
+  const occ = data.analytics?.occupancy;
+  if (occ) {
+    const n = occ.count ?? 0;
+    document.getElementById('t-people').innerHTML = `${n}<span class="stat-card-unit"> in room</span>`;
+  }
+}
+
+function applyAnalytics(a) {
+  const v = a.vitals || {};
+  const hr   = v.heart_rate?.heart_rate;
+  const rr   = v.respiratory_rate?.respiratory_rate;
+  const spo2 = v.spo2?.spo2;
+  const temp = v.temperature?.temperature;
+  const bp   = v.blood_pressure;
+
+  // Overview quick stats
+  set('t-hr-quick',   hr   != null ? `${fmt(hr)}<span class="stat-card-unit"> bpm</span>`   : '--');
+  document.getElementById('t-hr-quick').innerHTML = hr != null ? `${fmt(hr)}<span class="stat-card-unit"> bpm</span>` : '--';
+  document.getElementById('t-spo2-quick').innerHTML = spo2 != null ? `${fmt(spo2)}<span class="stat-card-unit"> %</span>` : '--';
+
+  // Vitals page
+  set('t-hr',   fmt(hr));   set('t-rr', fmt(rr));
+  set('t-spo2', fmt(spo2)); set('t-temp', fmt(temp, 1));
+  set('t-bp', bp ? `${fmt(bp.systolic)}/${fmt(bp.diastolic)}` : '--/--');
+
+  // Sparklines
+  if (hr   != null) pushSpark('t-hr-spark',   hr);
+  if (rr   != null) pushSpark('t-rr-spark',   rr);
+  if (spo2 != null) pushSpark('t-spo2-spark', spo2);
+
+  // HR status
+  if (hr != null) {
+    const s = hr < 50 || hr > 110 ? ['alert','Abnormal'] : hr < 60 || hr > 100 ? ['warn','Slightly elevated'] : ['ok','Normal'];
+    const el = document.getElementById('t-hr-status');
+    el.textContent = s[1]; el.className = `vital-status ${s[0]}`;
+  }
+
+  // Activity
+  const act  = a.activity || {};
+  const actN = (act.activity ?? '--').replace(/_/g,' ').toUpperCase();
+  const actC = act.confidence != null ? `${fmt(act.confidence * 100)}%` : '--';
+  set('t-activity', actN);       set('t-activity-conf', `Confidence: ${actC}`);
+  set('t-act-quick', actN);      set('t-act-conf-quick', actC);
+
+  // Gait
+  const g = a.gait || {};
+  document.getElementById('t-gait-speed').innerHTML   = g.speed    != null ? `${fmt(g.speed,1)}<span class="act-stat-unit"> m/s</span>` : '--';
+  document.getElementById('t-gait-cadence').innerHTML = g.cadence  != null ? `${fmt(g.cadence,0)}<span class="act-stat-unit"> spm</span>` : '--';
+  document.getElementById('t-gait-stride').innerHTML  = g.stride_length != null ? `${fmt(g.stride_length,2)}<span class="act-stat-unit"> m</span>` : '--';
+  set('t-gait-sym', g.symmetry != null ? `${fmt(g.symmetry*100,0)}%` : '--%');
+
+  // Fall
+  const fall = a.fall || {};
+  const fell = fall.fall_detected;
+  const risk = (fall.risk_level ?? 'low').toLowerCase();
+  const bal  = fall.balance_score != null ? `${fmt(fall.balance_score*100,0)}%` : '--';
+  const fallS = fell ? 'FALL DETECTED' : risk === 'high' ? 'High Risk' : 'Safe';
+  const fallC = fell ? 'fallen' : risk === 'high' ? 'risk' : 'safe';
+  set('t-fall-status', fallS);
+  document.getElementById('t-fall-status').className = `fall-status ${fallC}`;
+  set('t-fall-quick', fallS);
+  document.getElementById('t-fall-icon').textContent = fell ? '🚨' : risk === 'high' ? '⚠️' : '🛡️';
+  set('t-fall-detail', `Balance: ${bal} · Risk: ${risk}`);
+  set('t-fall-risk-quick', `Risk: ${risk}`);
+
+  // Gestures
+  const gest = a.gestures || {};
+  set('t-gest-left',  gest.left_hand  ?? gest.left  ?? 'idle');
+  set('t-gest-right', gest.right_hand ?? gest.right ?? 'idle');
+
+  // Sleep
+  const sleep = a.sleep || {};
+  set('t-sleep-stage', (sleep.stage ?? '--').toUpperCase());
+  set('t-sleep-conf', sleep.confidence != null ? `${fmt(sleep.confidence*100)}%` : '--');
+  set('t-sleep-quick', (sleep.stage ?? '--').toUpperCase());
+  set('t-sleep-conf-quick', sleep.confidence != null ? `${fmt(sleep.confidence*100)}%` : '--');
+
+  // Occupancy
+  const occ = a.occupancy || {};
+  set('t-occ-status', occ.occupied ? 'Occupied' : 'Empty');
+  set('t-occ-count', occ.count ?? 0);
+
+  // Stress
+  const emo = a.emotion || {};
+  const ss  = emo.stress_score ?? 0;
+  const sl  = (emo.stress_level ?? '--').toUpperCase();
+  set('t-stress-level', sl);       set('t-stress-quick', sl);
+  set('t-stress-score', `${fmt(ss,0)} / 100`);
+  set('t-stress-score-quick', `${fmt(ss,0)} / 100`);
+  document.getElementById('t-stress-bar').style.width = `${Math.min(ss,100)}%`;
+
+  // Health alerts
+  const alerts = a.health_alerts || {};
+  const level  = (alerts.alert_level ?? 'NORMAL').toUpperCase();
+  const anom   = alerts.anomalies ?? [];
+  const badgeEl = document.getElementById('t-alert-badge');
+  badgeEl.textContent = level;
+  if (level === 'CRITICAL') { badgeEl.style.background='rgba(248,113,113,.15)'; badgeEl.style.color='var(--danger)'; }
+  else if (level === 'WARNING') { badgeEl.style.background='rgba(251,191,36,.15)'; badgeEl.style.color='var(--warn)'; }
+  else { badgeEl.style.background='rgba(52,211,153,.15)'; badgeEl.style.color='var(--accent3)'; }
+  const alertList = document.getElementById('t-alert-list');
+  alertList.innerHTML = '';
+  if (anom.length) {
+    anom.forEach(txt => {
+      const div = document.createElement('div');
+      div.className = 'alert-item';
+      div.textContent = txt;
+      alertList.appendChild(div);
+    });
+  } else {
+    const div = document.createElement('div');
+    div.style.cssText = 'color:var(--muted);font-size:13px;padding:4px 0;';
+    div.textContent = 'No anomalies detected';
+    alertList.appendChild(div);
+  }
+}
+
+function applyTactical(t) {
+  // Threat
+  const tgt = t.targets || {};
+  const tl  = (tgt.threat_level ?? 'GREEN').toUpperCase();
+  const threatEl = document.getElementById('t-threat-big');
+  threatEl.textContent = tl;
+  threatEl.className   = `threat-big ${tl.toLowerCase()}`;
+  set('t-threat-count', `${tgt.target_count ?? 0} targets in area`);
+  const quickEl = document.getElementById('t-threat-quick');
+  quickEl.textContent = tl;
+  quickEl.className   = `stat-card-value ${tl === 'RED' ? 'c-red' : tl === 'YELLOW' ? 'c-yellow' : 'c-green'}`;
+
+  // Targets
+  const targets = tgt.targets ?? [];
+  set('t-target-type', targets.length ? (targets[0].classification ?? '--') : '--');
+
+  // Weapon
+  const weap = t.weapon || {};
+  const wt   = (weap.weapon_type ?? 'UNARMED').toUpperCase();
+  const weapEl = document.getElementById('t-weapon');
+  weapEl.textContent = wt;
+  weapEl.className   = `tac-mini-val ${wt === 'UNARMED' ? 'c-green' : wt === 'HANDGUN' ? 'c-yellow' : 'c-red'}`;
+  set('t-weapon-conf', `Conf: ${weap.confidence != null ? fmt(weap.confidence*100,0)+'%' : '--'}`);
+  set('t-armor', weap.body_armor_likelihood != null ? `${fmt(weap.body_armor_likelihood*100,0)}%` : '--');
+
+  // Concealment
+  const conc = t.concealment || {};
+  set('t-concealed', conc.concealed_targets ?? 0);
+  set('t-scan-quality', `Quality: ${conc.scan_quality ?? '--'}`);
+
+  // Crowd
+  const crowd = t.crowd || {};
+  set('t-crowd', crowd.estimated_count ?? 0);
+  set('t-crowd-density', crowd.density_category ?? 'SPARSE');
+
+  // Anomalies
+  const anom = t.anomalies || {};
+  const assess = (anom.threat_assessment ?? 'CLEAR').toUpperCase();
+  const anomEl = document.getElementById('t-anomaly-assess');
+  anomEl.textContent = assess;
+  anomEl.className   = `tac-kv-val ${assess === 'DANGER' ? 'c-red' : assess === 'SUSPICIOUS' ? 'c-yellow' : 'c-green'}`;
+  set('t-anomaly-count', anom.anomalies_found ?? 0);
+  set('t-scan-coverage', anom.scan_coverage ?? '--');
+
+  // Intent
+  const intent = t.intent || {};
+  const il    = (intent.intent ?? 'NORMAL').toUpperCase();
+  const prob  = (intent.attack_probability ?? 0) * 100;
+  const intentEl = document.getElementById('t-intent');
+  intentEl.textContent = il;
+  intentEl.className   = `intent-val ${il === 'ATTACK_IMMINENT' ? 'c-red' : il !== 'NORMAL' ? 'c-yellow' : 'c-green'}`;
+  document.getElementById('t-intent-bar').style.width = `${Math.min(prob,100)}%`;
+  set('t-intent-pct', `Attack probability: ${fmt(prob,0)}%`);
+
+  // Tactical activity
+  set('t-tac-activity', (t.tactical_activity?.activity ?? '--').replace(/_/g,' '));
+  set('t-tac-conf', t.tactical_activity?.confidence != null ? `${fmt(t.tactical_activity.confidence*100,0)}%` : '--');
+
+  // Anti-jam
+  const jam = t.anti_jam || {};
+  const js  = jam.under_attack ? 'UNDER ATTACK' : (jam.status ?? 'CLEAN');
+  const jamEl = document.getElementById('t-jam-status');
+  jamEl.textContent = js;
+  jamEl.className   = `tac-kv-val ${jam.under_attack ? 'c-red' : 'c-green'}`;
+  set('t-snr', jam.snr != null ? `${fmt(jam.snr,1)} dB` : '-- dB');
+}
+
+// ── Demo Mode ─────────────────────────────────────────────────────
+const ACTS = ['WALKING', 'STANDING', 'SITTING', 'RUNNING', 'LYING DOWN'];
+
+function makeDemoFrame() {
+  demoPhase += 0.05;
+  const hr  = 68 + Math.round(Math.sin(demoPhase) * 8);
+  const rr  = 15 + Math.round(Math.sin(demoPhase * .7) * 3);
+  const prob = Math.max(0, Math.min(1, .1 + Math.sin(demoPhase * .3) * .15));
+  return {
+    skeletons: [genDemoSkeleton(demoPhase)],
+    analytics: {
+      vitals: {
+        heart_rate:       { heart_rate: hr },
+        respiratory_rate: { respiratory_rate: rr },
+        spo2:             { spo2: 97 + Math.round(Math.sin(demoPhase * .4)) },
+        temperature:      { temperature: +(36.6 + Math.sin(demoPhase * .2) * .3).toFixed(1) },
+        blood_pressure:   { systolic: 118 + Math.round(Math.sin(demoPhase) * 6), diastolic: 76 }
+      },
+      activity: { activity: ACTS[Math.floor(demoPhase/4) % ACTS.length], confidence: .85 + Math.random()*.1 },
+      gait:    { speed: +(1.1+Math.sin(demoPhase)*.3).toFixed(2), cadence: 108+Math.round(Math.sin(demoPhase*.8)*10), stride_length:.65, symmetry:.94 },
+      fall:    { fall_detected: false, risk_level: 'low', balance_score: .92 },
+      gestures:{ left_hand:'idle', right_hand:'idle' },
+      sleep:   { stage:'awake', confidence:.95 },
+      occupancy:{ occupied:true, count:1 },
+      emotion: { stress_level:'low', stress_score: 20+Math.round(Math.sin(demoPhase)*15) },
+      health_alerts: { alert_level:'NORMAL', anomalies:[] }
+    },
+    tactical: {
+      targets:          { threat_level: prob>.4?'YELLOW':'GREEN', target_count:1, targets:[] },
+      weapon:           { weapon_type:'UNARMED', confidence:.95, body_armor_likelihood:.05 },
+      concealment:      { concealed_targets:0, scan_quality:'good' },
+      crowd:            { estimated_count:1, density_per_m2:.1, density_category:'SPARSE' },
+      tactical_activity:{ activity:'STANDING', confidence:.88 },
+      anomalies:        { threat_assessment:'CLEAR', anomalies_found:0, scan_coverage:'100%' },
+      intent:           { intent:'NORMAL', attack_probability: prob },
+      anti_jam:         { under_attack:false, status:'CLEAN', snr:44+Math.round(Math.sin(demoPhase*.6)*3) }
+    }
+  };
+}
+
+function genDemoSkeleton(t) {
+  // Simple standing/walking skeleton
+  const s = Math.sin(t); const c = Math.cos(t);
+  const sw = Math.sin(t * 2) * 0.15;
+  return [
+    {x:0,    y:1.7, z:0,    confidence:.99}, // Nose
+    {x:-.06, y:1.72,z:.05,  confidence:.95}, // L Eye
+    {x:.06,  y:1.72,z:.05,  confidence:.95}, // R Eye
+    {x:-.12, y:1.68,z:.04,  confidence:.9},  // L Ear
+    {x:.12,  y:1.68,z:.04,  confidence:.9},  // R Ear
+    {x:-.25, y:1.45,z:0,    confidence:.98}, // L Shoulder
+    {x:.25,  y:1.45,z:0,    confidence:.98}, // R Shoulder
+    {x:-.35, y:1.1, z:sw,   confidence:.9},  // L Elbow
+    {x:.35,  y:1.1, z:-sw,  confidence:.9},  // R Elbow
+    {x:-.3,  y:.78, z:sw*2, confidence:.85}, // L Wrist
+    {x:.3,   y:.78, z:-sw*2,confidence:.85}, // R Wrist
+    {x:-.12, y:.9,  z:0,    confidence:.97}, // L Hip
+    {x:.12,  y:.9,  z:0,    confidence:.97}, // R Hip
+    {x:-.13, y:.45, z:s*.1, confidence:.92}, // L Knee
+    {x:.13,  y:.45, z:-s*.1,confidence:.92}, // R Knee
+    {x:-.12, y:.02, z:s*.15,confidence:.88}, // L Ankle
+    {x:.12,  y:.02, z:-s*.15,confidence:.88},// R Ankle
+  ];
+}
+
+function startDemo() {
+  if (demoTimer) return;
+  setConnected('sim');
+  demoTimer = setInterval(() => handleFrame(makeDemoFrame()), 100);
+}
+function stopDemo() { clearInterval(demoTimer); demoTimer = null; }
+
+document.getElementById('t-btn-demo').addEventListener('click', () => {
+  const btn = document.getElementById('t-btn-demo');
+  if (demoTimer) {
+    stopDemo(); setConnected('disconnected');
+    btn.classList.remove('demo-active');
+    document.getElementById('t-demo-toggle').checked = false;
+  } else {
+    intendedDisconnect = true;
+    if (ws) ws.close();
+    startDemo();
+    btn.classList.add('demo-active');
+    document.getElementById('t-demo-toggle').checked = true;
+  }
+});
+
+document.getElementById('t-demo-toggle').addEventListener('change', e => {
+  const btn = document.getElementById('t-btn-demo');
+  if (e.target.checked) {
+    intendedDisconnect = true; if (ws) ws.close();
+    startDemo(); btn.classList.add('demo-active');
+  } else {
+    stopDemo(); setConnected('disconnected'); btn.classList.remove('demo-active');
+  }
+});
+
+// ── Node Polling ──────────────────────────────────────────────────
+async function pollNodes() {
+  try {
+    const uri = document.getElementById('t-ws-uri').value.trim();
+    const wsUrl = new URL(uri);
+    const res = await fetch(`http://${wsUrl.hostname}:3000/nodes`);
+    if (!res.ok) return;
+    const nodes = await res.json();
+    const now = Date.now();
+    let active = 0;
+    const grid = document.getElementById('t-nodes-grid');
+    grid.innerHTML = '';
+    for (const [id, stats] of Object.entries(nodes)) {
+      const age    = now - stats.last_seen_ms;
+      const online = age >= 0 && age < 5000;
+      if (online) active++;
+      const card = document.createElement('div');
+      card.className = 'node-card';
+      card.innerHTML = `
+        <div class="node-header">
+          <div class="node-dot ${online ? 'online' : 'offline'}"></div>
+          <div class="node-id">Node ${id}</div>
+          <div class="node-status ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</div>
+        </div>
+        <div class="node-stats">
+          <div class="node-stat-row">
+            <span class="node-stat-key">Packets</span>
+            <span class="node-stat-val">${stats.packet_count ?? '--'}</span>
+          </div>
+          <div class="node-stat-row">
+            <span class="node-stat-key">Last Seen</span>
+            <span class="node-stat-val">${online ? `${age}ms ago` : 'Stale'}</span>
+          </div>
+        </div>`;
+      grid.appendChild(card);
+    }
+    if (!Object.keys(nodes).length) {
+      grid.innerHTML = '<div style="color:var(--muted);font-size:13px;">No nodes discovered yet. Ensure the aggregator is running.</div>';
+    }
+    document.getElementById('t-node-count').textContent = active;
+  } catch (_) {}
+}
+setInterval(pollNodes, 2000);
+
+// ── Auto-connect ──────────────────────────────────────────────────
+connect(document.getElementById('t-ws-uri').value);
+</script>
+</body>
+</html>

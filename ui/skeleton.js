@@ -67,27 +67,29 @@ class SkeletonRenderer {
     for (let p = 0; p < this.maxPeople; p++) {
       const joints = KEYPOINT_NAMES.map(() => {
         const geo  = new THREE.SphereGeometry(0.07, 12, 12);
-        const mat  = new THREE.MeshStandardMaterial({ 
-          color: colors[p % colors.length], 
-          emissive: colors[p % colors.length], 
-          roughness: .3 
+        const mat  = new THREE.MeshStandardMaterial({
+          color: colors[p % colors.length],
+          emissive: colors[p % colors.length],
+          roughness: .3
         });
         const m = new THREE.Mesh(geo, mat);
         m.visible = false;
         this.scene.add(m);
+        this._jointObjects.push(m);
         return m;
       });
 
       const bones = SKELETON_BONES.map(([a, b]) => {
-        const mat = new THREE.LineBasicMaterial({ 
-          color: boneColors[p % boneColors.length], 
-          transparent: true, 
-          opacity: 0.7 
+        const mat = new THREE.LineBasicMaterial({
+          color: boneColors[p % boneColors.length],
+          transparent: true,
+          opacity: 0.7
         });
         const geo  = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
         const line = new THREE.Line(geo, mat);
         line.visible = false;
         this.scene.add(line);
+        this._boneObjects.push(line);
         return { line, a, b };
       });
 
@@ -104,8 +106,14 @@ class SkeletonRenderer {
       this.nodes.push(m);
     }
 
+    // Track bone and joint objects for disposal
+    this._boneObjects = [];
+    this._jointObjects = [];
+
     this._resize();
-    window.addEventListener('resize', () => this._resize());
+    this._resizeHandler = () => this._resize();
+    window.addEventListener('resize', this._resizeHandler);
+    this._animationFrameId = null;
     this._animate();
   }
 
@@ -185,8 +193,33 @@ class SkeletonRenderer {
   }
 
   _animate() {
-    requestAnimationFrame(() => this._animate());
+    this._animationFrameId = requestAnimationFrame(() => this._animate());
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  destroy() {
+    window.removeEventListener('resize', this._resizeHandler);
+    if (this._animationFrameId) {
+      cancelAnimationFrame(this._animationFrameId);
+      this._animationFrameId = null;
+    }
+    // Dispose tracked bone line objects
+    this._boneObjects.forEach(obj => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+      this.scene.remove(obj);
+    });
+    this._boneObjects = [];
+    // Dispose tracked joint mesh objects
+    this._jointObjects.forEach(obj => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+      this.scene.remove(obj);
+    });
+    this._jointObjects = [];
+    if (this.renderer) {
+      this.renderer.dispose();
+    }
   }
 }

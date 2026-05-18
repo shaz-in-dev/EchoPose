@@ -30,6 +30,10 @@ impl RawCsiFrame {
         if u32::from_le(frame.magic) != CSI_MAGIC {
             return None;
         }
+        let node_id = u16::from_le(frame.node_id);
+        if node_id > 255 {
+            return None;  // node_id would truncate when cast to u8 — reject
+        }
         // Guard against out-of-bounds IQ access
         if (frame.num_subcarriers as usize) > NUM_SUBCARRIERS {
             return None;
@@ -39,7 +43,8 @@ impl RawCsiFrame {
 
     /// Complex amplitude for subcarrier i: sqrt(I² + Q²)
     pub fn amplitude(&self, i: usize) -> f32 {
-        assert!(i < self.num_subcarriers as usize, "subcarrier index {i} out of range");
+        debug_assert!(i < self.num_subcarriers as usize, "subcarrier index {i} out of range");
+        if i >= self.num_subcarriers as usize { return 0.0; }
         let re = self.iq_data[i * 2]     as f32;
         let im = self.iq_data[i * 2 + 1] as f32;
         (re * re + im * im).sqrt()
@@ -47,7 +52,8 @@ impl RawCsiFrame {
 
     /// Phase angle for subcarrier i: atan2(Q, I)
     pub fn phase(&self, i: usize) -> f32 {
-        assert!(i < self.num_subcarriers as usize, "subcarrier index {i} out of range");
+        debug_assert!(i < self.num_subcarriers as usize, "subcarrier index {i} out of range");
+        if i >= self.num_subcarriers as usize { return 0.0; }
         let re = self.iq_data[i * 2]     as f32;
         let im = self.iq_data[i * 2 + 1] as f32;
         im.atan2(re)

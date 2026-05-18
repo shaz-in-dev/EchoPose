@@ -51,8 +51,8 @@ class FusionPipeline:
         # 3. Multi-person disambiguation via DBSCAN clustering
         # Extract mean Doppler spectrum across subcarriers for clustering
         doppler_spectrum = np.mean(hardened_features, axis=1)  # [nodes, doppler_bins]
-        per_person_tensors = self.disambiguator.disentangle_csi_signatures(
-            hardened_features, doppler_spectrum
-        )
+        # Collapse subcarrier dimension before disambiguation
+        doppler_view = np.mean(hardened_features, axis=1)  # [nodes, doppler_bins]
+        per_person_tensors = self.disambiguator.disentangle_csi_signatures(doppler_view, doppler_spectrum)
         
         return hardened_features, per_person_tensors

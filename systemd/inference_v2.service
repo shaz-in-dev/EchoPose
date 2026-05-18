@@ -11,6 +11,11 @@ Environment="PATH=/opt/rf-mesh/inference/venv/bin:$PATH"
 ExecStart=/opt/rf-mesh/inference/venv/bin/gunicorn server_v2:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT}
 Restart=always
 RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rf-mesh
 
 [Install]
 WantedBy=multi-user.target

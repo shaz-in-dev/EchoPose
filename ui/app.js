@@ -285,12 +285,19 @@ function updateAnalytics(a) {
   }
   const alertList = document.getElementById('v-alert-list');
   if (alertList) {
+    alertList.innerHTML = '';
     if (alerts.anomalies && alerts.anomalies.length) {
-      alertList.innerHTML = alerts.anomalies.map(a =>
-        `<div class="acard-alert-item">${escapeHtml(a)}</div>`
-      ).join('');
+      (alerts.anomalies || []).forEach(a => {
+        const div = document.createElement('div');
+        div.className = 'acard-alert-item';
+        div.textContent = a;  // textContent is safe — no HTML injection
+        alertList.appendChild(div);
+      });
     } else {
-      alertList.innerHTML = '<span class="acard-sub">No anomalies</span>';
+      const span = document.createElement('span');
+      span.className = 'acard-sub';
+      span.textContent = 'No anomalies';
+      alertList.appendChild(span);
     }
   }
 }
@@ -314,9 +321,11 @@ function escapeHtml(str) {
 async function pollNodes() {
   if (demoMode) return;
   try {
-    // Determine the aggregator HTTP URL from the WS URI
+    // Derive the aggregator HTTP port from the WS URI port (or use env override).
+    // The aggregator serves HTTP on AGGREGATOR_HTTP_PORT (default 3000).
     const wsUrl = new URL(wsUriInput.value.trim());
-    const httpUrl = `http://${wsUrl.hostname}:3000/nodes`;
+    const aggregatorPort = window.AGGREGATOR_HTTP_PORT || wsUrl.port || 3000;
+    const httpUrl = `http://${wsUrl.hostname}:${aggregatorPort}/nodes`;
     
     const res = await fetch(httpUrl);
     if (!res.ok) return;
@@ -327,15 +336,8 @@ async function pollNodes() {
     const now = Date.now();
     let active = 0;
     for (const [id, stats] of Object.entries(nodes)) {
-      const age = now - stats.last_seen_ms;
-      if (age >= 0 && age < 5000) active++;
-    }
-    // If all timestamps look like they are in the past but recent, count them
-    if (active === 0 && Object.keys(nodes).length > 0) {
-      // Fallback: just count non-zero packet_count nodes
-      for (const [id, stats] of Object.entries(nodes)) {
-        if (stats.packet_count > 0) active++;
-      }
+      const age_ms = now - stats.last_seen_ms;
+      if (age_ms >= 0 && age_ms < 5000) active++;
     }
     nodeCount.textContent = active;
   } catch (e) {
@@ -349,7 +351,8 @@ async function pollNodes() {
 async function fetchLocalization() {
   try {
     const wsUrl = new URL(wsUriInput.value.trim());
-    const httpUrl = `http://${wsUrl.hostname}:3000/localize`;
+    const aggregatorPort = window.AGGREGATOR_HTTP_PORT || wsUrl.port || 3000;
+    const httpUrl = `http://${wsUrl.hostname}:${aggregatorPort}/localize`;
     const res = await fetch(httpUrl);
     if (!res.ok) return;
     const nodeCoords = await res.json();
@@ -362,8 +365,8 @@ async function fetchLocalization() {
 
 btnLocalize.addEventListener('click', () => fetchLocalization());
 
-// Poll every 1 second
-setInterval(pollNodes, 1000);
+// Poll every 1 second — store ID so we can clear it on disconnect
+let nodePollingInterval = setInterval(pollNodes, 1000);
 
 // ── Keypoints table ───────────────────────────────────────────────
 const KP_NAMES = [
@@ -377,12 +380,27 @@ function updateKpTable(kps) {
   kps.forEach((kp, i) => {
     const div = document.createElement('div');
     div.className = 'kp-item';
-    div.innerHTML = `
-      <div class="kp-name">${KP_NAMES[i]}</div>
-      <div class="kp-coords">
-        ${kp.x.toFixed(2)}, ${kp.y.toFixed(2)}, ${kp.z.toFixed(2)}
-        <span class="kp-conf">${(kp.confidence * 100).toFixed(0)}%</span>
-      </div>`;
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'kp-name';
+    nameEl.textContent = KP_NAMES[i] ?? `KP${i}`;
+
+    const coordEl = document.createElement('div');
+    coordEl.className = 'kp-coords';
+    // Use Number() to guarantee numeric .toFixed() — guards against malformed server data
+    const x = Number(kp.x).toFixed(2);
+    const y = Number(kp.y).toFixed(2);
+    const z = Number(kp.z).toFixed(2);
+    const conf = (Number(kp.confidence) * 100).toFixed(0);
+    coordEl.textContent = `${x}, ${y}, ${z}`;
+
+    const confEl = document.createElement('span');
+    confEl.className = 'kp-conf';
+    confEl.textContent = `${conf}%`;
+    coordEl.appendChild(confEl);
+
+    div.appendChild(nameEl);
+    div.appendChild(coordEl);
     kpList.appendChild(div);
   });
 }
@@ -421,6 +439,10 @@ function connect(uri) {
   };
 
   ws.onclose = () => {
+    // Stop node polling to avoid accumulating duplicate intervals on reconnect
+    clearInterval(nodePollingInterval);
+    nodePollingInterval = setInterval(pollNodes, 1000);
+
     if (intendedDisconnect || demoMode) {
       statusBadge.textContent = 'Disconnected';
       statusBadge.className   = 'badge badge--disconnected';
@@ -555,5 +577,5 @@ btnRotate.addEventListener('click', () => {
 btnReset.addEventListener('click', () => skeleton.resetCamera());
 
 // ── Entry point ───────────────────────────────────────────────────
-// Auto-connect to the local inference server by default
-connect("ws://localhost:8765/ws/pose");
+// Auto-connect using the current hostname so this works in production/remote deploys
+connect(`ws://${window.location.hostname}:8765/ws/pose`);

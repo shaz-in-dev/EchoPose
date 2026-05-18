@@ -1,0 +1,23 @@
+# Prevent secrets and build artefacts from being baked into the Docker image
+.env
+*.env.*
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+dist/
+build/
+.venv
+venv
+node_modules
+logs/
+models/
+*.pt
+*.onnx
+*.pth
+requirements-dev.txt
+tests/
+research/

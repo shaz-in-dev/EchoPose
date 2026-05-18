@@ -157,7 +157,12 @@ class MultiDomainFusion:
         alpha = 0.4
         track.position = alpha * pos + (1 - alpha) * track.position
         track.sources[modality] = conf
-        track.confidence = min(sum(track.sources.values()), 0.99)
+        if track.sources:
+            total = sum(track.sources.values())
+            count = len(track.sources)
+            track.confidence = min(total / count, 0.99)  # weighted average, capped at 0.99
+        else:
+            track.confidence = 0.0
         track.last_update = time.time()
 
         # Upgrade classification if new modality provides one

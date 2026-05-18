@@ -22,6 +22,7 @@ class SleepAnalyzer:
         self._rr_history: list[float] = []
         self._motion_history: list[float] = []
         self._max_samples = int(window_minutes * 60)  # one entry per second
+        self._last_coords = None  # M4: explicit init so push_motion guard is reliable
 
     def push_vitals(self, hr: Optional[float], rr: Optional[float]) -> None:
         if hr is not None:
@@ -35,8 +36,9 @@ class SleepAnalyzer:
     def push_motion(self, skeleton: List[Dict]) -> None:
         """Compute frame-level motion energy and store."""
         coords = np.array([[kp.get("x", 0), kp.get("y", 0), kp.get("z", 0)] for kp in skeleton])
-        if len(self._motion_history) > 0:
-            energy = float(np.mean(np.abs(coords.flatten() - self._last_coords.flatten()))) if hasattr(self, "_last_coords") else 0.0
+        # M4: guard _last_coords against None (first frame or reset)
+        if self._last_coords is not None:
+            energy = float(np.mean(np.abs(coords.flatten() - self._last_coords.flatten())))
         else:
             energy = 0.0
         self._last_coords = coords

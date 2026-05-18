@@ -145,8 +145,14 @@ class GaitBiometricIdentifier:
         bounce = float(np.std(hip_c[:, 1]))
 
         # 7. gait symmetry (L-R hip correlation)
-        corr_matrix = np.corrcoef(poses[:, _L_HIP, 1], poses[:, _R_HIP, 1])
-        sym = float(corr_matrix[0, 1]) if np.isfinite(corr_matrix[0, 1]) else 0.0
+        left_y = poses[:, _L_HIP, 1]
+        right_y = poses[:, _R_HIP, 1]
+        if len(left_y) < 2 or len(right_y) < 2:
+            symmetry = 0.5  # neutral default
+        else:
+            corr_matrix = np.corrcoef(left_y, right_y)
+            symmetry = float(corr_matrix[0, 1]) if corr_matrix.ndim == 2 and corr_matrix.shape == (2, 2) else 0.5
+        sym = symmetry if np.isfinite(symmetry) else 0.0
 
         return np.array([stride_len, stride_var, cadence, arm_asym,
                          lk_mean, lk_std, rk_mean, rk_std,

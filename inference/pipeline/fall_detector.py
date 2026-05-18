@@ -5,6 +5,7 @@ Detects sudden falls from skeleton center-of-mass trajectory and
 CSI impact signatures.  Produces alert levels: LOW / HIGH / CRITICAL.
 """
 
+import os
 import time
 import numpy as np
 from typing import Dict, List
@@ -29,7 +30,8 @@ class FallDetector:
         self._pose_history: list[np.ndarray] = []
         self._max_history = int(fps * 5)
         self._last_alert_ts: float = 0.0
-        self._alert_cooldown: float = 5.0  # seconds between alerts
+        # M8: cooldown configurable via env var; defaults to 5.0 s
+        self._cooldown_s: float = float(os.getenv("FALL_ALERT_COOLDOWN_S", "5.0"))
 
     def push_skeleton(self, skeleton: List[Dict]) -> None:
         if len(skeleton) < 17:
@@ -56,7 +58,7 @@ class FallDetector:
 
         # Detect sudden fall: large negative velocity
         now = time.time()
-        if np.any(velocity < _FALL_VEL_THRESHOLD) and (now - self._last_alert_ts > self._alert_cooldown):
+        if np.any(velocity < _FALL_VEL_THRESHOLD) and (now - self._last_alert_ts > self._cooldown_s):
             self._last_alert_ts = now
             logger.warning("FALL DETECTED — alerting")
             return {

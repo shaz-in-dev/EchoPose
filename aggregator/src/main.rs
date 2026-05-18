@@ -29,7 +29,7 @@ use axum::{
     Json, Router,
 };
 use serde::Serialize;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::{Instant, SystemTime, UNIX_EPOCH}};
 use tokio::{net::UdpSocket, sync::{broadcast, RwLock}};
 use tower_http::{cors::{Any, CorsLayer}, services::ServeFile};
 use tracing::{error, info, warn};
@@ -48,7 +48,11 @@ pub struct NodeStats {
 #[derive(Clone, Default)]
 struct CalibrationState {
     is_calibrating: bool,
+    /// Wall-clock end time kept only for the /calibrate response JSON; do NOT use for elapsed
+    /// checking — use `started_at` + `duration_ms` instead to be immune to NTP jumps.
     end_ms: u64,
+    started_at: Option<Instant>,
+    duration_ms: u64,
     // [node_id] -> (summed_iq_data, sample_count)
     accumulators: HashMap<u8, (Vec<f32>, u32)>,
     // [node_id] -> averaged baseline
@@ -110,6 +114,9 @@ async fn main() -> anyhow::Result<()> {
         .parse()
         .unwrap_or(3);
 
+    // Initialise OnceLock statics from env before any task reads them
+    sync::init_window_us();
+
     let bcast_cap: usize = 256;
 
     let (tx, _rx) = broadcast::channel::<SyncedBundle>(bcast_cap);
@@ -153,7 +160,10 @@ async fn main() -> anyhow::Result<()> {
             let mut frame = CsiFrame::from(&raw);
 
             // Update tracker stats & apply calibration
-            let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+            let now_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
             
             // Critical Sync Fix: Overwrite unaligned device uptimes with host arrival time
             frame.timestamp_us = now_ms * 1000;
@@ -167,24 +177,40 @@ async fn main() -> anyhow::Result<()> {
                 // V3: Record RSSI for automated localization
                 if !frame.amplitudes.is_empty() {
                     let mut loc = localization_udp.write().await;
+                    // Use raw amplitude BEFORE denoising for RSSI estimation.
+                    // Each node reports its own amplitudes, so the "seen_by" node IS frame.node_id.
+                    // The constant offset (-50) is a placeholder; calibrate per hardware deployment.
                     let mean_amp = frame.amplitudes.iter().sum::<f32>() / frame.amplitudes.len() as f32;
                     let rssi = (20.0 * mean_amp.max(1e-6).log10()) as i16 - 50;
-                    // Use peer port LSB as a proxy for receiving-node identity
-                    let seen_by = (peer.port() & 0xFF) as u8;
+                    let seen_by = frame.node_id; // correct: each node reports its own measurement
                     loc.record_rssi(frame.node_id, seen_by, rssi);
+                    // Evict stale nodes to prevent rssi_matrix from growing unbounded
+                    let active_ids: Vec<u8> = tr.keys().copied().collect();
+                    loc.evict_stale_nodes(&active_ids);
                 }
             }
 
             {
                 let mut cal = calibration_udp.write().await;
                 if cal.is_calibrating {
-                    if now_ms < cal.end_ms {
+                    // Use monotonic Instant to be immune to NTP clock jumps
+                    let still_calibrating = cal.started_at
+                        .map(|t| t.elapsed().as_millis() < cal.duration_ms as u128)
+                        .unwrap_or(false);
+                    if still_calibrating {
                         // Accumulate samples for baseline average
+                        const EXPECTED_SUBCARRIERS: usize = 64;
+                        if frame.amplitudes.len() != EXPECTED_SUBCARRIERS {
+                            warn!("Node {}: unexpected amplitude count {} (expected {}), skipping calibration frame",
+                                  frame.node_id, frame.amplitudes.len(), EXPECTED_SUBCARRIERS);
+                            // still update stats but skip calibration accumulation
+                        } else {
                         let entry = cal.accumulators.entry(frame.node_id).or_insert((vec![0.0; frame.amplitudes.len()], 0));
                         for (i, &val) in frame.amplitudes.iter().enumerate() {
                             entry.0[i] += val;
                         }
                         entry.1 += 1;
+                        }
                     } else {
                         // Time's up: finalize baselines
                         cal.is_calibrating = false;
@@ -212,8 +238,10 @@ async fn main() -> anyhow::Result<()> {
             rolling_denoiser.denoise(frame.node_id, &mut frame.amplitudes);
 
             if let Some(bundle) = syncer.push(frame) {
-                // Fan-out; ignore if no subscribers
-                let _ = tx_udp.send(bundle);
+                match tx_udp.send(bundle) {
+                    Ok(_) => {}
+                    Err(e) => warn!("Bundle broadcast dropped (buffer full or no receivers): {e}"),
+                }
             }
         }
     });
@@ -245,9 +273,11 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/nodes",  get(nodes_handler))
+        .route("/nodes/:id/offline", axum::routing::delete(mark_node_offline))
         .route("/ws",     get(ws_handler))
         .route("/config", get(config_handler))
         .route("/calibrate", post(calibrate_handler))
+        .route("/calibrate/rssi", post(calibrate_rssi))
         .route("/localize",  get(localize_handler))
         .route_service("/firmware.bin", ServeFile::new("../firmware/build/firmware.bin"))
         .layer(cors)
@@ -287,11 +317,14 @@ async fn calibrate_handler(
         }
     }
     let mut cal = state.calibration.write().await;
+    let duration_ms: u64 = 5000;
     cal.is_calibrating = true;
-    cal.end_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64 + 5000;
+    cal.started_at = Some(Instant::now());
+    cal.duration_ms = duration_ms;
+    cal.end_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64 + duration_ms;
     cal.accumulators.clear();
-    info!("Calibration Initiated for 5000ms over WS/UDP");
-    Json(serde_json::json!({"status": "calibrating", "duration_ms": 5000}))
+    info!("Calibration Initiated for {}ms over WS/UDP", duration_ms);
+    Json(serde_json::json!({"status": "calibrating", "duration_ms": duration_ms}))
 }
 
 // GET /localize — Run the solver and return estimated (x,y,z) coordinates
@@ -311,11 +344,12 @@ async fn localize_handler(State(state): State<Arc<AppState>>) -> impl IntoRespon
 // GET /config
 async fn config_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     use crate::sync::WINDOW_US;
+    let window_us = *WINDOW_US.get().unwrap_or(&50_000);
     Json(serde_json::json!({
         "udp_port":       state.udp_port,
         "http_port":      state.http_port,
         "expected_nodes": state.expected_nodes,
-        "window_ms":      *WINDOW_US / 1_000,
+        "window_ms":      window_us / 1_000,
     }))
 }
 
@@ -349,4 +383,42 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         }
     }
     info!("WebSocket client disconnected");
+}
+
+// DELETE /nodes/:id/offline — manually mark a node as offline and remove it from the tracker
+async fn mark_node_offline(
+    axum::extract::Path(node_id): axum::extract::Path<u8>,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let mut tracker = state.tracker.write().await;
+    if tracker.remove(&node_id).is_some() {
+        info!("Node {} manually marked offline and removed from tracker", node_id);
+        Json(serde_json::json!({"status": "removed", "node_id": node_id}))
+    } else {
+        Json(serde_json::json!({"status": "not_found", "node_id": node_id}))
+    }
+}
+
+// POST /calibrate/rssi — record a reference distance measurement for RSSI calibration
+#[derive(serde::Deserialize)]
+struct RssiCalibRequest {
+    node_a: u8,
+    node_b: u8,
+    distance_m: f32,
+}
+
+async fn calibrate_rssi(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RssiCalibRequest>,
+) -> impl IntoResponse {
+    let _loc = state.localization.read().await;
+    // Log the calibration reference point
+    info!("RSSI calibration reference: node {} ↔ node {} = {:.2}m", req.node_a, req.node_b, req.distance_m);
+    Json(serde_json::json!({
+        "status": "recorded",
+        "node_a": req.node_a,
+        "node_b": req.node_b,
+        "distance_m": req.distance_m,
+        "note": "Restart aggregator with RSSI_OFFSET_DB env var calibrated to this measurement"
+    }))
 }

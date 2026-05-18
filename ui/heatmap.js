@@ -67,6 +67,13 @@ class CsiHeatmap {
     let maxVal = 1e-6;
     this.history.forEach(row => row.forEach(v => { if (v > maxVal) maxVal = v; }));
 
+    if (!isFinite(maxVal) || maxVal < 1e-6) {
+      // All values are zero (node offline) — show blank heatmap
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, W, H);
+      return;
+    }
+
     for (let t = 0; t < steps; t++) {
       const rowIdx = (this.head + t) % steps;
       const row    = this.history[rowIdx];

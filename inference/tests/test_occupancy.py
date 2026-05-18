@@ -32,7 +32,9 @@ def test_two_skeletons(analyzer):
 def test_low_conf_skeleton_not_detected(analyzer):
     skel = [[{"x": 0, "y": 0, "z": 0, "confidence": 0.1} for _ in range(17)]]
     result = analyzer.detect_presence(skeletons=skel)
-    assert result["method"] == "csi"
+    assert result["occupied"] is False
+    # No CSI data + uncalibrated: method is csi_unavailable (not yet fallen to csi path)
+    assert result["method"] in {"csi", "csi_unavailable"}
 
 
 # ── CSI energy detection ──────────────────────────────────────

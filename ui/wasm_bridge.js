@@ -16,6 +16,16 @@
 /* global EchoPoseWasm */
 window.EchoPoseWasm = (function () {
   let _wasm = null;
+  let _ready = false;
+  let _rejectReady = null;
+
+  const ready = new Promise((resolve, reject) => {
+    _rejectReady = reject;
+    _load().then(ok => {
+      if (ok) resolve(true);
+      // If _load() returned false the rejection was already called
+    });
+  });
 
   async function _load() {
     try {
@@ -24,15 +34,23 @@ window.EchoPoseWasm = (function () {
       const mod = await import('./wasm/pkg/echopose_wasm.js');
       await mod.default();              // fetch + compile .wasm
       _wasm = mod;
+      _ready = true;
       console.log('[wasm_bridge] EchoPose WASM loaded');
       return true;
     } catch (e) {
-      console.warn('[wasm_bridge] WASM not available — falling back to JS.', e.message);
+      console.error('[EchoPose WASM] Failed to load:', e);
+      _wasm = null;
+      _ready = false;
+      // Reject any pending .ready waiters
+      if (_rejectReady) _rejectReady(e);
       return false;
     }
   }
 
-  const ready = _load();
+  /** Returns true only when WASM loaded successfully. */
+  function isReady() {
+    return _ready;
+  }
 
   /** Normalise subcarrier amplitudes to [0,1] (sync after await ready). */
   function normalizeCSI(amplitudes) {
@@ -54,5 +72,5 @@ window.EchoPoseWasm = (function () {
     return Math.min(Math.max(conf, 0), 1);
   }
 
-  return { ready: ready, normalizeCSI: normalizeCSI, confAlpha: confAlpha };
+  return { ready: ready, isReady: isReady, normalizeCSI: normalizeCSI, confAlpha: confAlpha };
 })();

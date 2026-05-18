@@ -56,9 +56,11 @@ jobs:
         if: >-
           github.event_name == 'release' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || github.event.inputs.cargo_token }}
         run: |
+          # Prefer the org secret; fall back to the manually-supplied dispatch input.
+          # Mask the resolved value immediately so it never appears in logs.
+          CARGO_REGISTRY_TOKEN="${{ secrets.CARGO_REGISTRY_TOKEN || github.event.inputs.cargo_token }}"
+          echo "::add-mask::$CARGO_REGISTRY_TOKEN"
           if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
             echo "::warning::No cargo token available; skipping publish."
             exit 0

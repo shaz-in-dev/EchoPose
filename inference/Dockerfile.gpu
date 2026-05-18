@@ -1,0 +1,25 @@
+# Dockerfile.gpu — GPU-capable inference image
+# Use this instead of Dockerfile when deploying to nodes with nvidia.com/gpu: 1
+# Build: docker build -f Dockerfile.gpu -t echo-pose:inference-gpu .
+
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-dev python3-pip && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN python3.11 -m pip install --upgrade pip
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8765
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD python3.11 -c "import urllib.request; urllib.request.urlopen('http://localhost:${INFERENCE_WS_PORT:-8765}/health')" || exit 1
+
+CMD ["sh", "-c", "gunicorn server:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}"]

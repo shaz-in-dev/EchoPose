@@ -109,7 +109,12 @@ class BuildingMapper:
     # ── helpers ───────────────────────────────────────────────────
 
     def _project_ray(self, p1: np.ndarray, p2: np.ndarray, loss_db: float) -> None:
-        """Bresenham-style ray projection onto the attenuation grid."""
+        """Bresenham-style ray projection onto the attenuation grid.
+
+        Convention: Bresenham returns (x, y) where x indexes axis-0 (gx dimension)
+        and y indexes axis-1 (gy dimension) of the grid — i.e., grid[x, y] not grid[row, col].
+        Node positions are in (easting, northing) metres and map directly to (x, y).
+        """
         c1 = (p1 / self.res).astype(int)
         c2 = (p2 / self.res).astype(int)
         pts = self._bresenham(c1[0], c1[1], c2[0], c2[1])

@@ -37,7 +37,11 @@ class AcousticEventDetector:
     def set_node_positions(self, positions: List[Tuple[float, float, float]]) -> None:
         self._node_positions = [np.array(p) for p in positions]
 
+    MAX_ACOUSTIC_NODES = 16
+
     def push(self, node_id: int, csi_amplitudes: np.ndarray) -> None:
+        if node_id not in self._node_bufs and len(self._node_bufs) >= self.MAX_ACOUSTIC_NODES:
+            return  # reject unknown node to prevent memory exhaustion
         if node_id not in self._node_bufs:
             self._node_bufs[node_id] = []
         buf = self._node_bufs[node_id]

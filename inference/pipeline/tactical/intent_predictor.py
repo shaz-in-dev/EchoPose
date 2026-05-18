@@ -140,8 +140,10 @@ class BehavioralIntentPredictor:
         recent = poses[-int(self.fps * 10):]
         lw = np.std(recent[:, 9, 1])
         rw = np.std(recent[:, 10, 1])
-        asym = abs(lw - rw) / (lw + rw + 1e-9)
-        return float(np.clip(asym / 0.5, 0, 1))
+        total = lw + rw
+        if total < 1e-6:
+            return 0.0
+        return float(np.clip(abs(lw - rw) / total, 0, 1))
 
     def _scanning_behavior(self, poses: np.ndarray) -> float:
         """Head turning (nose X oscillation) → scanning environment."""

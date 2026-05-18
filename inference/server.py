@@ -70,7 +70,10 @@ env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 AGGREGATOR_WS  = os.getenv("AGGREGATOR_WS_URI", "ws://localhost:3000/ws")
-INFERENCE_PORT = int(os.getenv("INFERENCE_WS_PORT", "8765"))
+_raw_port = int(os.getenv("INFERENCE_WS_PORT", "8765"))
+if not 1 <= _raw_port <= 65535:
+    raise ValueError(f"INFERENCE_WS_PORT={_raw_port} is out of the valid range 1-65535")
+INFERENCE_PORT = _raw_port
 DEVICE         = os.getenv("INFERENCE_DEVICE", "auto")
 
 @asynccontextmanager
@@ -88,8 +91,9 @@ app = FastAPI(title="RF-Mesh Inference", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080,http://127.0.0.1:8000,http://127.0.0.1:8080").split(","),
-    allow_methods=["GET", "POST", "OPTIONS"], 
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+    allow_credentials=False,  # keep False; set True only with explicit origins, never with wildcard
 )
 
 estimator = PoseEstimator()
@@ -141,7 +145,8 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Dropping dead WebSocket connection: %s", exc)
                 dead_connections.add(connection)
         for dead in dead_connections:
             self.disconnect(dead)
@@ -176,7 +181,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 # ── Feature 6 & 7: Enterprise Observability ────────────────────────
-sys_metrics = SystemMetrics(port=9090)
+sys_metrics = SystemMetrics(port=int(os.getenv("METRICS_PORT", "9090")))
 struct_logger = StructuredLogger(log_dir="logs")
 
 # ── Background task: pull from aggregator, infer, broadcast ──────
@@ -284,7 +289,7 @@ async def connect_and_process(fusion_pipeline):
                     "concealment": concealment_detector.scan(),
                     "weapon": weapon_detector.detect(),
                     "crowd": crowd_analyzer.estimate(
-                        room_area_m2=50.0,
+                        room_area_m2=float(os.getenv("ROOM_AREA_M2", "50.0")),
                         skeleton_count=len(smoothed_skeletons),
                     ),
                     "tactical_activity": tactical_activity.classify(),
@@ -369,30 +374,37 @@ async def ws_pose(ws: WebSocket):
 
 
 # ── REST ──────────────────────────────────────────────────────────
+def _client_ip(request: Request) -> str:
+    """Extract client IP safely — works behind nginx/k8s ingress where request.client may be None."""
+    if request.client is not None:
+        return request.client.host
+    return request.headers.get("X-Forwarded-For", "unknown").split(",")[0].strip()
+
+
 @app.get("/health")
 async def health(request: Request):
-    limiter.check_rate_limit(request.client.host)
+    await limiter.check_rate_limit(_client_ip(request))
     return {"status": "ok", "ui_clients": manager.count}
 
 
 @app.get("/analytics")
-async def analytics(request: Request):
+async def analytics(request: Request, _: None = Depends(verify_api_key)):
     """Return the latest health metrics, activity, and alert snapshot."""
-    limiter.check_rate_limit(request.client.host)
+    await limiter.check_rate_limit(_client_ip(request))
     return _latest_analytics or {"status": "no_data"}
 
 
 @app.get("/tactical")
-async def tactical(request: Request):
+async def tactical(request: Request, _: None = Depends(verify_api_key)):
     """Return the latest tactical analytics snapshot."""
-    limiter.check_rate_limit(request.client.host)
+    await limiter.check_rate_limit(_client_ip(request))
     return _latest_tactical or {"status": "no_data"}
 
 
 @app.get("/disaster")
-async def disaster(request: Request):
+async def disaster(request: Request, _: None = Depends(verify_api_key)):
     """Return the latest disaster-response analytics snapshot."""
-    limiter.check_rate_limit(request.client.host)
+    await limiter.check_rate_limit(_client_ip(request))
     return _latest_disaster or {"status": "no_data"}
 
 

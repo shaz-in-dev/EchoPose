@@ -65,8 +65,12 @@ class OptimizedInference:
         try:
             from onnxruntime.quantization import quantize_dynamic, QuantType
             quantize_dynamic(str(ONNX_PATH), str(QUANTIZED_PATH), weight_type=QuantType.QUInt8)
-        except Exception:
-            pass # Fails if ONNX missing, handled gracefully
+        except Exception as e:
+            import logging
+            logging.getLogger("rf_inference.optimized").warning(
+                "INT8 quantization failed (%s); falling back to unquantized ONNX on CPU. "
+                "Inference may be slower than expected.", e
+            )
 
     def infer(self, features):
         if not self.session: return None

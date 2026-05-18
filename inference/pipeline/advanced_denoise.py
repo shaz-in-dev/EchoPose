@@ -126,6 +126,11 @@ class AdvancedDenoiser:
                     continue
 
                 arr = np.array(data, dtype=np.float32)
+
+                # M9: sanitise NaN/Inf before any computation to prevent propagation
+                if not np.all(np.isfinite(arr)):
+                    arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+
                 # Mean subtraction (background removal)
                 arr -= arr.mean()
 
@@ -138,7 +143,7 @@ class AdvancedDenoiser:
                     elif stage == 'spectral':
                         arr = self._spectral_subtraction(arr)
 
-                # Guard against NaN/Inf from denoising stages
+                # Guard against NaN/Inf introduced by denoising stages
                 if not np.all(np.isfinite(arr)):
                     arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
 

@@ -19,3 +19,31 @@ firmware/build/
 venv/
 env/
 ENV/
+
+# Python packaging artefacts — local builds should never be committed
+dist/
+build/
+*.egg-info/
+
+# Test / coverage artefacts
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Important documents — kept local, never pushed
+*.docx
+*.doc
+*.xlsx
+*.pdf
+
+# Node / npm
+node_modules/
+package-lock.json
+
+# Secrets
+*.env.*
+
+#Docs
+docs/business/
+docs/financial/
+docs/legal/

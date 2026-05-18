@@ -1,0 +1,56 @@
+{
+  "name": "echopose-desktop",
+  "version": "2.0.0",
+  "description": "EchoPose WiFi-CSI Pose Estimation — Desktop Command Dashboard",
+  "main": "main.js",
+  "author": "EchoPose",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable",
+    "build:installer": "electron-builder --win nsis",
+    "build:dir": "electron-builder --dir",
+    "package": "electron-packager . EchoPose --platform=win32 --arch=x64 --out=../dist/desktop --overwrite --icon=www/icon.ico --no-asar"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^36.0.0",
+    "electron-builder": "^25.0.0",
+    "electron-packager": "^17.1.2"
+  },
+  "build": {
+    "appId": "com.echopose.desktop",
+    "forceCodeSigning": false,
+    "mac": { "identity": null },
+    "productName": "EchoPose",
+    "copyright": "Copyright © 2026 EchoPose",
+    "directories": {
+      "output": "../dist/desktop2"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "www/**"
+    ],
+    "win": {
+      "target": [
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "nsis",     "arch": ["x64"] }
+      ],
+      "icon": "www/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "www/icon.ico",
+      "installerHeaderIcon": "www/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EchoPose"
+    },
+    "portable": {
+      "artifactName": "EchoPose-${version}-portable.exe"
+    }
+  }
+}

@@ -22,6 +22,7 @@ All methods operate on raw CSI amplitude arrays [subcarriers] or
 """
 
 import numpy as np
+import time
 from scipy import signal
 from scipy.signal import find_peaks, butter, filtfilt, welch
 from typing import Dict, Optional
@@ -42,6 +43,7 @@ class VitalsExtractor:
         self._amplitude_history: list[np.ndarray] = []
         self._baseline_variance: Optional[float] = None
         self._calibration_factor: float = 0.15  # empirical, tune with IR reference
+        self._first_push_time: Optional[float] = None  # M5: track when buffering started
 
     # ── public API ────────────────────────────────────────────────
 
@@ -51,6 +53,9 @@ class VitalsExtractor:
         if arr.size == 0 or not np.all(np.isfinite(arr)):
             logger.warning("Vitals push: skipping invalid amplitudes (empty or NaN/Inf).")
             return
+        # M5: record first push time to detect stalled buffering
+        if self._first_push_time is None:
+            self._first_push_time = time.monotonic()
         self._amplitude_history.append(arr)
         if len(self._amplitude_history) > self.history_len:
             self._amplitude_history = self._amplitude_history[-self.history_len:]
@@ -58,6 +63,9 @@ class VitalsExtractor:
     def extract_all(self, node_amplitudes: Optional[np.ndarray] = None) -> Dict:
         """Return all available vital signs from the current buffer."""
         if len(self._amplitude_history) < int(self.fs * 5):
+            # M5: if no data has arrived for more than 30 s, report no_signal instead of buffering forever
+            if self._first_push_time is not None and (time.monotonic() - self._first_push_time) > 30.0:
+                return {"status": "no_signal", "reason": "No CSI data received in 30s"}
             return {"status": "buffering", "samples": len(self._amplitude_history)}
 
         history = np.array(self._amplitude_history)  # [T, subcarriers]
@@ -199,6 +207,16 @@ class VitalsExtractor:
         """
         if hr_bpm is None or hr_bpm <= 0:
             return {"systolic_mmhg": None, "diastolic_mmhg": None, "confidence": 0.0}
+
+        # M6: use sorted keys when node_amplitudes is a dict to guarantee consistent node ordering
+        if isinstance(node_amplitudes, dict):
+            sorted_nodes = sorted(node_amplitudes.keys())
+            if len(sorted_nodes) >= 2:
+                arr0 = np.array(node_amplitudes[sorted_nodes[0]])
+                arr1 = np.array(node_amplitudes[sorted_nodes[1]])
+                node_amplitudes = np.array([arr0, arr1])
+            else:
+                node_amplitudes = None
 
         if node_amplitudes is not None and node_amplitudes.ndim >= 2 and node_amplitudes.shape[0] >= 2:
             pwv = self._calculate_pwv(node_amplitudes)

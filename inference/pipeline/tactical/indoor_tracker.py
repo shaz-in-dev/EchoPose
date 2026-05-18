@@ -8,6 +8,7 @@ environments where GPS is unavailable.
 Accuracy: ~25 cm with ≥3 calibrated nodes.
 """
 
+import os
 import numpy as np
 from typing import Dict, List, Tuple, Optional
 import logging
@@ -15,6 +16,7 @@ import logging
 logger = logging.getLogger("rf_inference.tactical.indoor_tracker")
 
 SAMPLE_RATE = 20.0
+SUBCARRIER_SPACING_HZ = float(os.getenv("WIFI_SUBCARRIER_SPACING_HZ", "312500.0"))  # 802.11n default
 _SPEED_OF_LIGHT = 3e8
 _FREQ_HZ = 2.4e9
 _WAVELENGTH = _SPEED_OF_LIGHT / _FREQ_HZ
@@ -102,7 +104,7 @@ class IndoorTracker:
         if len(unwrapped) < 2:
             return 0.0
         slope = np.polyfit(np.arange(len(unwrapped)), unwrapped, 1)[0]
-        tau = abs(slope) / (2 * np.pi * 312.5e3)  # 312.5 kHz subcarrier spacing
+        tau = abs(slope) / (2 * np.pi * SUBCARRIER_SPACING_HZ)  # subcarrier spacing, configurable via WIFI_SUBCARRIER_SPACING_HZ
         return float(tau * _SPEED_OF_LIGHT)
 
     def _trilaterate(self, distances: Dict[int, float]) -> np.ndarray:

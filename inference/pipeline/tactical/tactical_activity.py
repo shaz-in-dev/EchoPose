@@ -111,7 +111,7 @@ class TacticalActivityClassifier:
         if len(history) >= 5:
             recent_wrists = history[-5:, _R_WRIST, 1]
             diffs = np.diff(recent_wrists)
-            throw_vel = float(np.min(diffs) * self.fps) if len(diffs) > 0 else 0.0
+            throw_vel = float(abs(np.min(diffs)) * self.fps) if len(diffs) > 0 else 0.0  # magnitude of max downward wrist acceleration
         else:
             throw_vel = 0.0
 
@@ -137,8 +137,8 @@ class TacticalActivityClassifier:
         if arm["both_up"] and speed < 0.1:
             return ("SURRENDERING", 0.90)
 
-        # Throwing: rapid upward arm velocity
-        if arm["throw_velocity"] < -1.5:
+        # Throwing: rapid upward arm velocity (magnitude of max downward wrist acceleration)
+        if arm["throw_velocity"] > 1.5:
             return ("THROWING", 0.78)
 
         # Taking aim: one arm extended forward steadily

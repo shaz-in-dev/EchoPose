@@ -34,11 +34,16 @@ impl RollingDenoiser {
             let background = if buf.is_empty() {
                 0.0
             } else {
-                let mut sorted: Vec<f32> = buf.iter().copied().collect();
-                sorted.sort_unstable_by(|a, b| {
-                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                });
-                sorted[sorted.len() / 2]
+                // Filter NaNs before sorting to prevent median contamination
+                let mut sorted: Vec<f32> = buf.iter().copied().filter(|v| v.is_finite()).collect();
+                if sorted.is_empty() {
+                    0.0
+                } else {
+                    sorted.sort_unstable_by(|a, b| {
+                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    sorted[sorted.len() / 2]
+                }
             };
 
             if buf.len() >= BACKGROUND_WINDOW {

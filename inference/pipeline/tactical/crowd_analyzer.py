@@ -6,6 +6,7 @@ CSI using spectral clustering (≤20 targets) and statistical density
 estimation (20+ targets).
 """
 
+import os
 import numpy as np
 from scipy.signal import welch, find_peaks
 from typing import Dict, List, Optional

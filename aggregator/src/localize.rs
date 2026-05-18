@@ -32,6 +32,12 @@ impl LocalizationSolver {
             .insert(from_node, rssi);
     }
 
+    /// Evict entries for nodes no longer in the active set, preventing unbounded growth.
+    pub fn evict_stale_nodes(&mut self, active_node_ids: &[u8]) {
+        let active: std::collections::HashSet<u8> = active_node_ids.iter().copied().collect();
+        self.rssi_matrix.retain(|k, _| active.contains(k));
+    }
+
     /// Solves for relative (x, y, z) coordinates.
     /// In this V3 prototype, we use a spring-embedded simulation to converge on positions.
     pub fn solve(&self, node_ids: &[u8]) -> HashMap<u8, NodePosition> {
@@ -51,15 +57,17 @@ impl LocalizationSolver {
         }
 
         // Anchor the first node at (0, -1.8, 2)
-        if let Some(&first_id) = node_ids.first() {
-            positions.insert(first_id, NodePosition { x: 0.0, y: -1.8, z: 2.0 });
+        let first_id = node_ids.first().copied();
+        if let Some(fid) = first_id {
+            positions.insert(fid, NodePosition { x: 0.0, y: -1.8, z: 2.0 });
         }
 
         // Simple iterative force-directed refinement (100 steps)
         // Nodes "push" each other based on RSSI (stronger = closer)
         for _ in 0..100 {
             let mut forces: HashMap<u8, (f32, f32)> = HashMap::new();
-            
+            let mut max_force_mag: f32 = 0.0;
+
             for &i_id in node_ids {
                 let mut fx = 0.0;
                 let mut fz = 0.0;
@@ -79,24 +87,31 @@ impl LocalizationSolver {
                         .and_then(|m| m.get(&j_id))
                         .copied()
                         .unwrap_or(-70);
-                    
+
                     let target_dist = 10.0f32.powf((-40.0 - rssi as f32) / 20.0);
-                    
+
                     let diff = dist - target_dist;
                     let strength = 0.05;
                     fx += (dx / dist) * diff * strength;
                     fz += (dz / dist) * diff * strength;
                 }
+                max_force_mag = max_force_mag.max(fx.abs() + fz.abs());
                 forces.insert(i_id, (fx, fz));
             }
 
-            // Apply forces (except for the anchor)
-            for (idx, &id) in node_ids.iter().enumerate() {
-                if idx == 0 { continue; } 
+            // Apply forces — skip the anchor node so it never drifts
+            for &id in node_ids {
+                if Some(id) == first_id { continue; }  // anchor is fixed
                 let f = forces[&id];
-                let p = positions.get_mut(&id).unwrap();
-                p.x += f.0;
-                p.z += f.1;
+                if let Some(p) = positions.get_mut(&id) {
+                    p.x += f.0;
+                    p.z += f.1;
+                }
+            }
+
+            // Convergence early exit
+            if max_force_mag < 1e-3 {
+                break;
             }
         }
 

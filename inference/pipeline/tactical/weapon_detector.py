@@ -6,6 +6,7 @@ torso CSI reflections (body armour / metal), and skeletal arm-swing
 patterns.  Classifies: unarmed, handgun, rifle, heavy-load.
 """
 
+import collections
 import numpy as np
 from scipy.signal import welch
 from typing import Dict, List, Optional
@@ -30,9 +31,9 @@ class WeaponDetectionSystem:
 
     def __init__(self, fs: float = SAMPLE_RATE):
         self.fs = fs
-        self._skel_buf: list[np.ndarray] = []
-        self._csi_buf: list[np.ndarray] = []
         self._max = int(fs * 5)
+        self._skel_buf: collections.deque = collections.deque(maxlen=self._max)
+        self._csi_buf: collections.deque = collections.deque(maxlen=self._max)
 
     def push(self, skeleton: List[Dict],
              csi_amplitudes: Optional[np.ndarray] = None) -> None:
@@ -44,9 +45,6 @@ class WeaponDetectionSystem:
         self._skel_buf.append(arr)
         if csi_amplitudes is not None:
             self._csi_buf.append(np.asarray(csi_amplitudes, dtype=np.float64))
-        for b in (self._skel_buf, self._csi_buf):
-            if len(b) > self._max:
-                del b[: len(b) - self._max]
 
     def detect(self) -> Dict:
         """Analyse latest buffer for armed-status indicators."""
@@ -88,7 +86,7 @@ class WeaponDetectionSystem:
         if not self._csi_buf or len(self._csi_buf) < 20:
             return {"armor_prob": 0.0}
 
-        csi = np.array(self._csi_buf[-60:])
+        csi = np.array(list(self._csi_buf)[-60:])
         n_sub = csi.shape[1]
         torso_zone = csi[:, n_sub // 3: 2 * n_sub // 3]
 

@@ -62,7 +62,7 @@ class DisasterResponseEngine:
             )
 
         # Trapped-person low motion with anomaly deviation
-        if activity.get("activity") in {"lying", "sitting"} and anomalies.get("is_anomaly"):
+        if activity.get("activity") in {"lying", "sitting"} and anomalies.get("anomalies_found"):
             alerts.append(
                 DisasterAlert(
                     level="WARNING",

@@ -10,6 +10,7 @@ Handles worst-case deployment scenarios intelligently:
 
 import numpy as np
 import logging
+from collections import deque
 
 logger = logging.getLogger("rf_inference.robust")
 
@@ -17,7 +18,8 @@ class RobustCSIProcessor:
     def __init__(self, expected_nodes: int = 3, num_sub: int = 64):
         self.expected_nodes = expected_nodes
         self.num_sub = num_sub
-        self.interference_history = []
+        # M2: use a bounded deque to prevent unbounded memory growth at 20 Hz
+        self.interference_history = deque(maxlen=200)
         self.node_health = {i: 1.0 for i in range(expected_nodes)}
 
     def detect_nlos(self, csi_matrix: np.ndarray) -> bool:

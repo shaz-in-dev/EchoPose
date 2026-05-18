@@ -114,8 +114,7 @@ class PoseNetV2(nn.Module):
         # Let the network attend to different Doppler bins
         attn_out, _ = self.spatial_attention(temporal_out, temporal_out, temporal_out)
         
-        # We take the context representation of the last sequence step (highest velocity bin state)
-        # or we could pool. Let's pool the sequence dimension.
+        # Mean over velocity bins: pool the sequence dimension for context representation.
         context = torch.mean(attn_out, dim=1) # [B, 256]
         
         # Pose Regression

@@ -54,13 +54,17 @@ class OccupancyAnalyzer:
                     "confidence": 0.95,
                 }
 
+        # M7: guard against _baseline_energy being None before any CSI computation
+        if self._baseline_energy is None and csi_amplitudes is None:
+            return {"occupied": False, "num_people": 0, "method": "csi_unavailable", "confidence": 0.0}
+
         presence_csi = False
         presence_vitals = False
 
         if csi_amplitudes is not None and csi_amplitudes.size > 0:
             # Method 2: CSI energy
             energy = float(np.mean(csi_amplitudes ** 2))
-            baseline = self._baseline_energy if self._baseline_energy else self.energy_threshold
+            baseline = self._baseline_energy if self._baseline_energy is not None else self.energy_threshold
             presence_csi = energy > baseline * 1.3
 
             # Method 3: vital-frequency content

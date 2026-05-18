@@ -169,8 +169,12 @@ class AntiJammingDefense:
 
         # A sweep manifests as an unusually flat high-energy spectrum
         if len(psd) > 5:
-            flatness = float(np.exp(np.mean(np.log(psd + 1e-12))) /
-                             (np.mean(psd) + 1e-12))
+            if np.all(psd < 1e-10):
+                return results  # flat zero PSD — no signal, nothing to flag
+            geometric_mean = np.exp(np.mean(np.log(psd + 1e-10)))
+            arithmetic_mean = np.mean(psd) + 1e-12
+            spectral_flatness = geometric_mean / arithmetic_mean
+            flatness = spectral_flatness
             if flatness > 0.8 and float(np.mean(psd)) > 0.01:
                 results.append({
                     "type": "FREQUENCY_SWEEP",

@@ -99,9 +99,10 @@ impl LocalizationSolver {
                     continue;
                 }
                 let f = forces[&id];
-                let p = positions.get_mut(&id).unwrap();
-                p.x += f.0;
-                p.z += f.1;
+                if let Some(p) = positions.get_mut(&id) {
+                    p.x += f.0;
+                    p.z += f.1;
+                }
             }
         }
 

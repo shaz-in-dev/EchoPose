@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RF-Inference Mesh — Live Dashboard</title>
+  <meta name="description" content="Real-time Wi-Fi CSI pose estimation — see through walls with radio waves" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ── Header ───────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-pulse"></div>
+      <span class="header-title">RF-Inference Mesh</span>
+    </div>
+    <div class="header-right">
+      <div id="status-badge" class="badge badge--disconnected">Disconnected</div>
+      <div class="stat-pill"><span id="fps-display">0</span> <span class="stat-label">Hz</span></div>
+      <div class="stat-pill"><span id="node-count">0</span> <span class="stat-label">nodes</span></div>
+    </div>
+  </header>
+
+  <!-- ── Main Layout ──────────────────────────────────── -->
+  <main class="layout">
+
+    <!-- 3-D Skeleton Viewport -->
+    <section class="panel panel--primary" id="viewport-panel">
+      <div class="panel-header">
+        <span class="panel-title">3D Pose Skeleton</span>
+        <div class="controls-row">
+          <button id="btn-rotate"  class="ctrl-btn" title="Auto-rotate">Rotate</button>
+          <button id="btn-reset"   class="ctrl-btn" title="Reset camera">Reset</button>
+          <button id="btn-localize" class="ctrl-btn" style="color: var(--accent);" title="Auto-localize nodes">Localize</button>
+          <button id="btn-demo"    class="ctrl-btn demo-btn" title="Toggle demo mode">Demo</button>
+        </div>
+      </div>
+      <canvas id="skeleton-canvas"></canvas>
+      <div class="viewport-overlay">
+        <div class="axis-label x">X</div>
+        <div class="axis-label y">Y</div>
+        <div class="axis-label z">Z</div>
+      </div>
+    </section>
+
+    <!-- Right panels -->
+    <aside class="side-panels">
+
+      <!-- Recording Panel -->
+      <section class="panel panel--record">
+        <div class="panel-header">
+          <span class="panel-title">Session Recording</span>
+        </div>
+        <div style="padding: 12px;">
+          <p style="color: #888; font-size: 0.85em; margin-bottom: 12px;">
+            Save tracking data to a local file for later analysis.
+          </p>
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button id="btn-record" class="ctrl-btn" style="flex: 1;">Record</button>
+            <button id="btn-stop" class="ctrl-btn hidden" style="flex: 1; color: var(--danger);">Stop</button>
+          </div>
+          <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+            <label class="ctrl-btn" style="display: block; text-align: center; cursor: pointer;">
+              Load Playback
+              <input type="file" id="file-playback" accept=".json" style="display: none;">
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- CSI Heatmap -->
+      <section class="panel panel--heatmap">
+        <div class="panel-header">
+          <span class="panel-title">CSI Subcarrier Heatmap</span>
+          <select id="heatmap-node" class="ctrl-select">
+            <option value="0">Node 0</option>
+            <option value="1">Node 1</option>
+            <option value="2">Node 2</option>
+          </select>
+        </div>
+        <canvas id="heatmap-canvas" width="320" height="160"></canvas>
+      </section>
+
+      <!-- Keypoints table -->
+      <section class="panel panel--keypoints">
+        <div class="panel-header">
+          <span class="panel-title">Keypoints</span>
+        </div>
+        <div id="keypoints-list" class="kp-list"></div>
+      </section>
+
+      <!-- Signal metrics -->
+      <section class="panel panel--metrics">
+        <div class="panel-header">
+          <span class="panel-title">Signal Metrics</span>
+        </div>
+        <canvas id="metrics-canvas" width="320" height="120"></canvas>
+      </section>
+
+    </aside>
+
+    <!-- ── Analytics Dashboard (full-width bottom) ──── -->
+    <section class="analytics-strip" id="analytics-strip">
+      <div class="analytics-strip-header">
+        <span class="panel-title">Health &amp; Activity Analytics</span>
+        <button id="btn-toggle-analytics" class="ctrl-btn">Hide</button>
+      </div>
+      <div class="analytics-cards" id="analytics-cards">
+
+        <!-- Vitals -->
+        <div class="acard acard--vitals">
+          <div class="acard-title">Vitals</div>
+          <div class="acard-body">
+            <div class="vital-row">
+              <span class="vital-icon">&#x2764;</span>
+              <span class="vital-label">HR</span>
+              <span class="vital-value" id="v-hr">--</span>
+              <span class="vital-unit">bpm</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">&#x1F6AB;</span>
+              <span class="vital-label">RR</span>
+              <span class="vital-value" id="v-rr">--</span>
+              <span class="vital-unit">br/m</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">&#x1F4A7;</span>
+              <span class="vital-label">SpO2</span>
+              <span class="vital-value" id="v-spo2">--</span>
+              <span class="vital-unit">%</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">&#x1F321;</span>
+              <span class="vital-label">Temp</span>
+              <span class="vital-value" id="v-temp">--</span>
+              <span class="vital-unit">&deg;C</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">&#x1F4C8;</span>
+              <span class="vital-label">BP</span>
+              <span class="vital-value" id="v-bp">--/--</span>
+              <span class="vital-unit">mmHg</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity -->
+        <div class="acard acard--activity">
+          <div class="acard-title">Activity</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-activity">--</div>
+            <div class="acard-sub" id="v-activity-conf"></div>
+            <div class="acard-divider"></div>
+            <div class="acard-detail"><span>Speed</span><span id="v-gait-speed">--</span></div>
+            <div class="acard-detail"><span>Cadence</span><span id="v-gait-cadence">--</span></div>
+            <div class="acard-detail"><span>Stride</span><span id="v-gait-stride">--</span></div>
+            <div class="acard-detail"><span>Symmetry</span><span id="v-gait-sym">--</span></div>
+          </div>
+        </div>
+
+        <!-- Fall & Balance -->
+        <div class="acard acard--fall">
+          <div class="acard-title">Fall Detection</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-fall-status">Safe</div>
+            <div class="acard-detail"><span>Risk</span><span id="v-fall-risk">--</span></div>
+            <div class="acard-detail"><span>Balance</span><span id="v-fall-balance">--</span></div>
+          </div>
+        </div>
+
+        <!-- Gestures -->
+        <div class="acard acard--gesture">
+          <div class="acard-title">Gestures</div>
+          <div class="acard-body">
+            <div class="acard-detail"><span>Left</span><span id="v-gest-left">idle</span></div>
+            <div class="acard-detail"><span>Right</span><span id="v-gest-right">idle</span></div>
+          </div>
+        </div>
+
+        <!-- Sleep -->
+        <div class="acard acard--sleep">
+          <div class="acard-title">Sleep Stage</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-sleep-stage">--</div>
+            <div class="acard-sub" id="v-sleep-conf"></div>
+          </div>
+        </div>
+
+        <!-- Occupancy -->
+        <div class="acard acard--occupancy">
+          <div class="acard-title">Occupancy</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-occupancy">--</div>
+            <div class="acard-detail"><span>People</span><span id="v-occ-count">0</span></div>
+          </div>
+        </div>
+
+        <!-- Stress / Emotion -->
+        <div class="acard acard--emotion">
+          <div class="acard-title">Stress</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-stress-level">--</div>
+            <div class="acard-meter">
+              <div class="acard-meter-fill" id="v-stress-bar" style="width: 0%"></div>
+            </div>
+            <div class="acard-sub" id="v-stress-score">0 / 100</div>
+          </div>
+        </div>
+
+        <!-- Health Alerts -->
+        <div class="acard acard--alerts">
+          <div class="acard-title">Health Alerts</div>
+          <div class="acard-body">
+            <div class="acard-big" id="v-alert-level">NORMAL</div>
+            <div class="acard-alert-list" id="v-alert-list">
+              <span class="acard-sub">No anomalies</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── Tactical Analytics (full-width bottom) ──── -->
+    <section class="analytics-strip tactical-strip" id="tactical-strip">
+      <div class="analytics-strip-header">
+        <span class="panel-title">Tactical Analytics</span>
+        <button id="btn-toggle-tactical" class="ctrl-btn">Hide</button>
+      </div>
+      <div class="analytics-cards" id="tactical-cards">
+
+        <!-- Threat Tracker -->
+        <div class="acard acard--threat">
+          <div class="acard-title">Threats</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-threat-level">GREEN</div>
+            <div class="acard-detail"><span>Targets</span><span id="t-target-count">0</span></div>
+            <div class="acard-detail"><span>Type</span><span id="t-target-type">--</span></div>
+          </div>
+        </div>
+
+        <!-- Concealment -->
+        <div class="acard acard--concealment">
+          <div class="acard-title">Concealment</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-concealed-count">0</div>
+            <div class="acard-sub">hidden targets</div>
+            <div class="acard-detail"><span>Quality</span><span id="t-scan-quality">--</span></div>
+          </div>
+        </div>
+
+        <!-- Weapon Detection -->
+        <div class="acard acard--weapon">
+          <div class="acard-title">Weapon</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-weapon-type">UNARMED</div>
+            <div class="acard-detail"><span>Confidence</span><span id="t-weapon-conf">--</span></div>
+            <div class="acard-detail"><span>Armor</span><span id="t-armor">--</span></div>
+          </div>
+        </div>
+
+        <!-- Crowd -->
+        <div class="acard acard--crowd">
+          <div class="acard-title">Crowd</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-crowd-count">0</div>
+            <div class="acard-sub" id="t-crowd-density">--</div>
+            <div class="acard-detail"><span>Category</span><span id="t-density-cat">SPARSE</span></div>
+          </div>
+        </div>
+
+        <!-- Tactical Activity -->
+        <div class="acard acard--tac-activity">
+          <div class="acard-title">Tac Activity</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-tac-activity">--</div>
+            <div class="acard-detail"><span>Conf</span><span id="t-tac-conf">--</span></div>
+          </div>
+        </div>
+
+        <!-- Anomalies -->
+        <div class="acard acard--anomaly">
+          <div class="acard-title">Anomalies</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-threat-assess">CLEAR</div>
+            <div class="acard-detail"><span>Found</span><span id="t-anomaly-count">0</span></div>
+            <div class="acard-detail"><span>Coverage</span><span id="t-scan-coverage">--</span></div>
+          </div>
+        </div>
+
+        <!-- Intent -->
+        <div class="acard acard--intent">
+          <div class="acard-title">Intent</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-intent">NORMAL</div>
+            <div class="acard-meter">
+              <div class="acard-meter-fill intent-bar" id="t-intent-bar" style="width: 0%"></div>
+            </div>
+            <div class="acard-detail"><span>Score</span><span id="t-intent-score">0</span></div>
+          </div>
+        </div>
+
+        <!-- Anti-Jam -->
+        <div class="acard acard--antijam">
+          <div class="acard-title">RF Status</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-jam-status">CLEAN</div>
+            <div class="acard-detail"><span>Threats</span><span id="t-jam-threats">0</span></div>
+          </div>
+        </div>
+
+        <!-- Sensor Fusion -->
+        <div class="acard acard--fusion">
+          <div class="acard-title">Fusion COP</div>
+          <div class="acard-body">
+            <div class="acard-big" id="t-fusion-tracks">0</div>
+            <div class="acard-sub">fused tracks</div>
+            <div class="acard-detail"><span>Sources</span><span id="t-fusion-sources">--</span></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Connection modal ─────────────────────────────── -->
+  <div id="connect-modal" class="modal">
+    <div class="modal-box">
+      <h2>Connect to Inference Server</h2>
+      <label>WebSocket URI</label>
+      <input id="ws-uri" value="ws://localhost:8765/ws/pose" />
+      <div style="display: flex; gap: 8px;">
+        <button id="btn-connect" style="flex: 1;">Connect</button>
+        <button id="btn-close-modal" style="flex: 1; background: var(--surface2); color: var(--text);">Play Demo</button>
+      </div>
+      <p id="connect-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- ── Scripts ──────────────────────────────────────── -->
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js" integrity="sha384-VNsXsAA4GPi/iYMdDHltCbw+8P+v9oJDhlPRHEvMSuzyHAGKjVBJMtl5m25KCLQ7" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-E2G72GZdmpn8Iln23mHsYjlJ+dCaB0fR3sNVdFjhJl5V9pUvNsXr6ywD8S7G7EK" crossorigin="anonymous"></script>
+  <script src="heatmap.js"></script>
+  <script src="skeleton.js"></script>
+  <script src="recorder.js"></script>
+  <script src="wasm_bridge.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

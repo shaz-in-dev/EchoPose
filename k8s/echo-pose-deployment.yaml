@@ -19,7 +19,15 @@ spec:
     spec:
       containers:
       - name: aggregator
-        image: echo-pose:aggregator-latest
+        image: ghcr.io/shaz-in-dev/echopose-aggregator:v0.2.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
         ports:
         - containerPort: 3000
         resources:
@@ -46,7 +54,8 @@ metadata:
     tier: ml
 spec:
   serviceName: echo-pose-inference
-  replicas: 4
+  replicas: 1  # Inference is stateful (in-memory WS + globals); scale vertically not horizontally.
+               # To scale horizontally, add Redis pub/sub for state sharing first.
   selector:
     matchLabels:
       app: echo-pose
@@ -59,7 +68,15 @@ spec:
     spec:
       containers:
       - name: inference
-        image: echo-pose:inference-latest
+        image: ghcr.io/shaz-in-dev/echopose-inference:v0.2.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # model cache writes are required
+          capabilities:
+            drop: ["ALL"]
         ports:
         - containerPort: 8765
         resources:
@@ -74,4 +91,80 @@ spec:
         - name: EXPECTED_NODES
           value: "3"
         - name: INFERENCE_DEVICE
-          value: "cuda"
+          value: "cpu"  # Switch to "cuda" only after building inference/Dockerfile.gpu (nvidia/cuda base)
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8765
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8765
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+
+---
+# Service for the inference StatefulSet — required for pods to be reachable.
+# sessionAffinity: ClientIP ensures a browser always hits the same pod (WebSocket state).
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-pose-inference
+  labels:
+    app: echo-pose
+    tier: ml
+spec:
+  selector:
+    app: echo-pose
+    tier: ml
+  ports:
+  - name: ws
+    port: 8765
+    targetPort: 8765
+  sessionAffinity: ClientIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: echo-pose-network-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: echo-pose
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: echo-pose
+    ports:
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 8765
+  - from: []  # allow external UI connections on 8765
+    ports:
+    - protocol: TCP
+      port: 8765
+  egress:
+  - {}  # allow all egress (DNS, aggregator, external APIs)
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: echo-pose-aggregator-pdb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: echo-pose
+      tier: edge

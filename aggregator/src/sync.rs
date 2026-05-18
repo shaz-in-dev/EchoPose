@@ -17,9 +17,12 @@ fn read_window_us() -> u64 {
         * 1_000 // convert ms → µs
 }
 
-lazy_static::lazy_static! {
-    pub static ref WINDOW_US: u64 = read_window_us();
-    pub static ref STALE_LIMIT_US: u64 = *WINDOW_US; // flush after one window period
+pub static WINDOW_US: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+pub static STALE_LIMIT_US: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+
+pub fn init_window_us() {
+    let w = WINDOW_US.get_or_init(read_window_us);
+    STALE_LIMIT_US.get_or_init(|| *w);
 }
 
 struct Window {
@@ -46,11 +49,24 @@ impl NodeSynchronizer {
 
     /// Feed a decoded frame; returns a SyncedBundle if the window is complete.
     pub fn push(&mut self, frame: CsiFrame) -> Option<SyncedBundle> {
-        let slot = (frame.timestamp_us / *WINDOW_US) * *WINDOW_US;
+        let window_us = *WINDOW_US.get().unwrap_or(&50_000);
+        let stale_limit_us = *STALE_LIMIT_US.get().unwrap_or(&50_000);
 
-        // Keep a running "clock" from the newest timestamp we've ever seen
-        if frame.timestamp_us > self.newest_ts_us {
-            self.newest_ts_us = frame.timestamp_us;
+        // Cap how far ahead a new timestamp can push the reference clock (5 windows max)
+        let max_forward_jump = 5 * window_us;
+        let capped_ts = frame.timestamp_us.min(self.newest_ts_us.saturating_add(max_forward_jump));
+        if capped_ts > self.newest_ts_us {
+            self.newest_ts_us = capped_ts;
+        }
+
+        let slot = (capped_ts / window_us) * window_us;
+
+        // Reject stale frames before inserting (prevents phantom detections from
+        // nodes that drop out and rejoin with a backlog of buffered frames).
+        let frame_age_us = self.newest_ts_us.saturating_sub(capped_ts);
+        let max_age_us = 2 * window_us;
+        if frame_age_us > max_age_us {
+            return None;
         }
 
         // Dynamically track new nodes
@@ -77,7 +93,7 @@ impl NodeSynchronizer {
             .windows
             .keys()
             .copied()
-            .filter(|&k| self.newest_ts_us.saturating_sub(k) > *STALE_LIMIT_US)
+            .filter(|&k| self.newest_ts_us.saturating_sub(k) > stale_limit_us)
             .collect();
 
         for k in stale_keys {

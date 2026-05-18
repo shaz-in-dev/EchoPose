@@ -183,6 +183,12 @@ class PoseEstimator:
             x = torch.tensor(x_np).to(self.device)
             raw = self.model(x).squeeze(0).cpu().numpy()  # [MAX_PEOPLE, 17, 4]
 
+        if raw.ndim == 2:  # single-person output [17, 4]
+            raw = raw[np.newaxis, ...]  # → [1, 17, 4]
+        elif raw.ndim != 3:
+            logger.warning(f"Unexpected pose output shape {raw.shape}, skipping frame")
+            return []
+
         results = []
         num_people = min(MAX_PEOPLE, raw.shape[0]) if hasattr(raw, 'shape') else MAX_PEOPLE
         for person_idx in range(num_people):

@@ -58,21 +58,23 @@ class TemporalPoseFilterV2:
             # 2. Measurement Innovation (Difference between reality and physics prediction)
             innovation = measured_coords - predicted
             
-            # 3. Dynamic Gain Control 
-            # High confidence -> Trust measurement
-            # Low confidence  -> Trust physics momentum
-            # Using sigmoid activation smoothed by measurement confidence
-            mean_conf = float(np.clip(np.mean(measured_confs), 0.0, 1.0))
-            gain = 1.0 / (1.0 + np.exp(-10.0 * (mean_conf - 0.5))) # Scales smoothly [0,1]
-            if not np.isfinite(gain):
-                gain = 0.5
-            gain_matrix = gain * measured_confs[:, np.newaxis] # Apply individual joint confidence weight
+            # 3. Dynamic Gain Control
+            # Use per-joint confidence directly as the blending weight.
+            # High confidence -> Trust measurement; Low confidence -> Trust physics momentum.
+            # M1: removed redundant sigmoid scalar that was double-weighting confidence.
+            gain_matrix = measured_confs[:, np.newaxis]  # shape [17, 1], values in [0, 1]
             
             # 4. Update the actual position state
             self.states[p_idx] = predicted + gain_matrix * innovation
             
-            # 5. Update the momentum/velocity state (maintain 70% of old momentum, add 30% of new force)
-            self.velocities[p_idx] = 0.7 * self.velocities[p_idx] + 0.3 * innovation
+            # 5. Update the momentum/velocity state
+            # Apply 70/30 EMA, then dead-band: if innovation magnitude is below the
+            # noise floor for this joint, clamp velocity to zero to prevent ghost drift.
+            updated_vel = 0.7 * self.velocities[p_idx] + 0.3 * innovation
+            innovation_mag = np.linalg.norm(innovation, axis=1, keepdims=True)  # (J,1)
+            dead_band = 0.01  # units matching the coordinate space (~1% of normalised range)
+            updated_vel[innovation_mag[:, 0] < dead_band] = 0.0
+            self.velocities[p_idx] = updated_vel
             
             # 6. Physical Anomaly Detection
             # If a joint "teleports" (moves more than 50% of the screen in 50ms), nuke it

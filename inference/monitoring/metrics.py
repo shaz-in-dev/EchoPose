@@ -45,8 +45,12 @@ class SystemMetrics:
         # Start Prometheus scraping server in background
         try:
             start_http_server(port, registry=registry)
-        except OSError:
-            pass # Already running in this process/port
+        except OSError as exc:
+            import logging
+            logging.getLogger("rf_inference.metrics").warning(
+                "Could not start Prometheus metrics server on port %d (%s). "
+                "Metrics will not be available for scraping.", port, exc
+            )
 
     def record_inference(self, latency: float, confidence: float):
         self.latency_ms.observe(latency)

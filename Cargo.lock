@@ -673,7 +673,6 @@ dependencies = [
  "echopose-localize",
  "echopose-sync",
  "echopose-types",
- "lazy_static",
  "serde",
  "serde_json",
  "tokio",

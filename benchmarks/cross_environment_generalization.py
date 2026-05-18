@@ -55,36 +55,6 @@ def pck(pred: np.ndarray, gt: np.ndarray, threshold: float = 0.1) -> float:
     return float(np.mean(d < threshold))
 
 
-def body_normalized_pck(
-    pred: np.ndarray, gt: np.ndarray, threshold: float = 0.1
-) -> float:
-    """PCK where the threshold is scaled per sample by body height.
-
-    Body height = distance from ankle midpoint (joints 15 & 16) to nose
-    (joint 0) in ground-truth coordinates.  A prediction is "correct" for
-    joint j in sample n when its error < threshold * body_height[n].
-
-    Parameters
-    ----------
-    pred, gt : np.ndarray
-        Shape ``(N, P, J, 3)`` — people P, joints J, xyz.
-    threshold : float
-        Fraction of body height used as the PCK threshold (default 0.1).
-    """
-    # Average across people to get (N, J, 3)
-    pred_avg = pred.mean(axis=1)
-    gt_avg = gt.mean(axis=1)
-    errors = np.linalg.norm(pred_avg - gt_avg, axis=-1)   # (N, J)
-
-    ankle_mid = (gt_avg[:, 15] + gt_avg[:, 16]) / 2.0    # (N, 3)
-    head = gt_avg[:, 0]                                    # (N, 3)
-    heights = np.linalg.norm(head - ankle_mid, axis=-1) + 1e-8  # (N,)
-
-    thresholds = threshold * heights[:, None]              # (N, J)
-    correct = errors < thresholds
-    return float(correct.mean())
-
-
 def load_pairs(items: List[Dict[str, str]]) -> Tuple[np.ndarray, np.ndarray]:
     xs = []
     ys = []
@@ -94,101 +64,26 @@ def load_pairs(items: List[Dict[str, str]]) -> Tuple[np.ndarray, np.ndarray]:
     return np.concatenate(xs, axis=0), np.concatenate(ys, axis=0)
 
 
-def _feature_depth(features: np.ndarray) -> np.ndarray:
-    return np.mean(features, axis=(1, 2, 3), keepdims=False).astype(np.float64)
-
-
-def _target_depth(poses_xyz: np.ndarray) -> np.ndarray:
-    # Collapse [N, P, J, 3] -> [N] using mean z across people and joints.
-    return np.mean(poses_xyz[..., 2], axis=(1, 2)).astype(np.float64)
-
-
-def _fit_affine(x: np.ndarray, y: np.ndarray) -> Tuple[float, float]:
-    design = np.stack([x, np.ones_like(x)], axis=1)
-    coef, *_ = np.linalg.lstsq(design, y, rcond=None)
-    return float(coef[0]), float(coef[1])
-
-
-def _predict_depth(mode: str, f: np.ndarray, a: float = 0.0, b: float = 0.0) -> np.ndarray:
-    if mode == "zero_z":
-        return np.zeros_like(f)
-    if mode == "mean_feature_z":
-        return f
-    if mode == "affine_feature_z":
-        return a * f + b
-    raise ValueError(f"Unknown baseline mode: {mode}")
-
-
-def _cv_select_mode(train_features: np.ndarray, train_poses_xyz: np.ndarray) -> Tuple[str, float, float]:
-    """Pick a simple depth baseline using train-only cross-validation."""
-    f = _feature_depth(train_features)
-    z = _target_depth(train_poses_xyz)
-    n = f.shape[0]
-    folds = min(5, max(2, n))
-
-    candidates = ("zero_z", "mean_feature_z", "affine_feature_z")
-    scores = {name: [] for name in candidates}
-
-    for fold in range(folds):
-        val_mask = (np.arange(n) % folds) == fold
-        tr_mask = ~val_mask
-        f_tr, z_tr = f[tr_mask], z[tr_mask]
-        f_val, z_val = f[val_mask], z[val_mask]
-
-        if f_tr.size == 0 or f_val.size == 0:
-            continue
-
-        a, b = _fit_affine(f_tr, z_tr)
-        for name in candidates:
-            z_hat = _predict_depth(name, f_val, a=a, b=b)
-            rmse = float(np.sqrt(np.mean((z_hat - z_val) ** 2)))
-            scores[name].append(rmse)
-
-    mean_scores = {
-        name: (float(np.mean(vals)) if vals else float("inf"))
-        for name, vals in scores.items()
-    }
-    best_mode = min(mean_scores, key=mean_scores.get)
-    a, b = _fit_affine(f, z)
-    return best_mode, a, b
-
-
-def baseline_predict(
-    features: np.ndarray,
-    mode: str,
-    affine_a: float,
-    affine_b: float,
-    max_people: int = 3,
-    num_joints: int = 17,
-) -> np.ndarray:
+def baseline_predict(features: np.ndarray, max_people: int = 3, num_joints: int = 17) -> np.ndarray:
     """Deterministic baseline predictor to validate benchmark plumbing."""
     n = features.shape[0]
     pred = np.zeros((n, max_people, num_joints, 3), dtype=np.float32)
-    z_pred = _predict_depth(mode, _feature_depth(features), a=affine_a, b=affine_b)
-    pred[..., 2] = z_pred[:, None, None]
+    pred[..., 2] = np.mean(features, axis=(1, 2, 3), keepdims=False)[:, None, None]
     return pred
 
 
 def run(manifest_path: Path, out_path: Path) -> Dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    x_train, y_train = load_pairs(manifest["train"])
-    y_train_xyz = y_train[..., :3]
-    baseline_mode, affine_a, affine_b = _cv_select_mode(x_train, y_train_xyz)
+    _, _ = load_pairs(manifest["train"])  # reserved for future model fit
 
     room_metrics: Dict[str, Dict[str, float]] = {}
     for room, items in manifest["test"].items():
         x, y = load_pairs(items)
-        pred = baseline_predict(
-            x,
-            mode=baseline_mode,
-            affine_a=affine_a,
-            affine_b=affine_b,
-        )
+        pred = baseline_predict(x)
         y3 = y[..., :3]
         room_metrics[room] = {
             "mpjpe": mpjpe(pred, y3),
             "pck@0.1": pck(pred, y3, 0.1),
-            "body_pck@0.1": body_normalized_pck(pred, y3, 0.1),
             "samples": int(x.shape[0]),
         }
 
@@ -197,7 +92,7 @@ def run(manifest_path: Path, out_path: Path) -> Dict[str, Any]:
         "algorithm": "sha256",
         "manifest_sha256": _sha256_file(manifest_path),
         "data_files_sha256": {str(p): _sha256_file(p) for p in unique_files},
-        "baseline_id": f"{baseline_mode}-v2",
+        "baseline_id": "mean-z-v1",
     }
 
     report: Dict[str, Any] = {
