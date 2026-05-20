@@ -70,7 +70,8 @@ def test_h4_disambiguation_receives_2d_input():
 def test_h5_domain_adaptation_has_threading_lock():
     from research.domain_adaptation import RealTimeDomainAdaptation
     da = RealTimeDomainAdaptation()
-    assert hasattr(da, "_lock") and isinstance(da._lock, threading.Lock)
+    lock_type = type(threading.Lock())
+    assert hasattr(da, "_lock") and isinstance(da._lock, lock_type)
 
 
 def test_h5_concurrent_adapt_online_does_not_raise():
