@@ -74,3 +74,35 @@ services:
     depends_on:
       - inference
     restart: unless-stopped
+
+  # ── Matter protocol bridge ────────────────────────────────────────
+  # Exposes EchoPose as a Matter device for Apple Home, Google Home, Alexa.
+  # Enable by setting MATTER_ENABLED=true in .env.
+  # After first start, visit http://localhost:8765/matter/pairing for the QR code.
+  matter-bridge:
+    build:
+      context: ./matter-bridge
+      dockerfile: Dockerfile
+    image: echopose_matter_bridge:latest
+    ports:
+      - "${MATTER_HTTP_PORT:-7788}:7788"          # HTTP control API (localhost only in prod)
+      - "${MATTER_PORT:-5540}:5540/udp"            # Matter protocol (UDP)
+    volumes:
+      - matter-storage:/app/matter-storage         # persist commissioning data across restarts
+    environment:
+      MATTER_HTTP_PORT:     "${MATTER_HTTP_PORT:-7788}"
+      MATTER_PORT:          "${MATTER_PORT:-5540}"
+      MATTER_PASSCODE:      "${MATTER_PASSCODE:-20202021}"
+      MATTER_DISCRIMINATOR: "${MATTER_DISCRIMINATOR:-3840}"
+      MATTER_STORAGE_DIR:   /app/matter-storage
+    restart: unless-stopped
+    profiles: ["default", "standard", "high-throughput"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7788/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  matter-storage:
+    driver: local
