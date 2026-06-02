@@ -19,6 +19,13 @@ from websockets.exceptions import WebSocketException
 from pipeline.fusion import FusionPipeline
 from pipeline.pose import PoseEstimator as DistributedInference  # gpu_server removed; use shared estimator
 from security import limiter, verify_api_key
+from integrations.homeassistant import HAConfig, HomeAssistantBridge
+from integrations.matter import MatterBridge
+from integrations.webhooks import WebhookManager
+
+_ha_bridge_v2:      HomeAssistantBridge | None = None
+_matter_bridge_v2:  MatterBridge        | None = None
+_webhook_manager_v2 = WebhookManager()
 
 logger = logging.getLogger("rf_inference.async_server")
 
@@ -71,7 +78,15 @@ class HighThroughputServer:
             tasks = [client.send_text(payload) for client in self.clients]
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
-                
+
+            # 4. Smart-home bridge publish (analytics not available in v2 — pass skeleton count only)
+            person_count = len(skeletons[0]) if skeletons and skeletons[0] else 0
+            if _ha_bridge_v2:
+                await _ha_bridge_v2.publish({}, person_count)
+            if _matter_bridge_v2:
+                await _matter_bridge_v2.publish({}, person_count)
+            await _webhook_manager_v2.process_frame({}, person_count)
+
             self.bundle_queue.task_done()
 
     async def _receive_ui_commands(self, ws: WebSocket):
@@ -124,8 +139,20 @@ def _client_ip(request: Request) -> str:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Spin up background workers and stop them cleanly during shutdown.
-    worker = asyncio.create_task(server._infer_continuously())
+    global _ha_bridge_v2, _matter_bridge_v2
+
+    await _webhook_manager_v2.start()
+
+    ha_cfg = HAConfig.from_env()
+    if ha_cfg:
+        _ha_bridge_v2 = HomeAssistantBridge(ha_cfg)
+        await _ha_bridge_v2.start()
+
+    _matter_bridge_v2 = MatterBridge.from_env()
+    if _matter_bridge_v2:
+        await _matter_bridge_v2.start()
+
+    worker   = asyncio.create_task(server._infer_continuously())
     agg_task = asyncio.create_task(server.aggregator_loop())
     try:
         yield
@@ -133,6 +160,11 @@ async def lifespan(_: FastAPI):
         worker.cancel()
         agg_task.cancel()
         await asyncio.gather(worker, agg_task, return_exceptions=True)
+        await _webhook_manager_v2.stop()
+        if _ha_bridge_v2:
+            await _ha_bridge_v2.stop()
+        if _matter_bridge_v2:
+            await _matter_bridge_v2.stop()
 
 
 app = FastAPI(title="EchoPose V2 High-Throughput Server", lifespan=lifespan)
@@ -164,6 +196,44 @@ async def health(request: Request):
         "ui_clients": len(server.clients),
         "queue_depth": server.bundle_queue.qsize(),
     }
+
+@app.get("/matter/pairing")
+async def matter_pairing_v2(request: Request):
+    await limiter.check_rate_limit(_client_ip(request))
+    if _matter_bridge_v2 is None:
+        return {"status": "disabled", "detail": "Start with MATTER_ENABLED=true"}
+    return await _matter_bridge_v2.get_pairing()
+
+
+@app.get("/matter/status")
+async def matter_status_v2(request: Request):
+    await limiter.check_rate_limit(_client_ip(request))
+    if _matter_bridge_v2 is None:
+        return {"status": "disabled"}
+    return await _matter_bridge_v2.get_status()
+
+
+@app.get("/license")
+async def license_info_v2(request: Request):
+    """Active license tier and feature availability."""
+    await limiter.check_rate_limit(_client_ip(request))
+    from security import get_license_tier, LicenseTier, _LICENSE_MODE
+    tier = get_license_tier()
+    return {
+        "tier":  tier.name,
+        "label": tier.label(),
+        "mode":  _LICENSE_MODE,
+        "features": {
+            "basic_analytics": True,
+            "ha_mqtt":         True,
+            "matter":          True,
+            "alerts":          True,
+            "fast_adapt":      tier >= LicenseTier.PROFESSIONAL,
+            "tactical":        tier >= LicenseTier.ENTERPRISE,
+            "defense_modules": tier >= LicenseTier.DEFENSE,
+        },
+    }
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -28,6 +28,7 @@ from pathlib import Path
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 import numpy as np
+import torch
 import uvicorn
 import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
@@ -62,7 +63,12 @@ from pipeline.tactical import (
 
 from monitoring.metrics import SystemMetrics
 from custom_logger import StructuredLogger
-from security import limiter, verify_api_key, IncomingCSIBundle
+from security import limiter, verify_api_key, IncomingCSIBundle, LicenseTier, require_tier
+from integrations.homeassistant import HAConfig, HomeAssistantBridge
+from integrations.matter import MatterBridge
+from integrations.webhooks import WebhookManager, EventType
+from pipeline.fast_adapt import FastAdapter
+from pipeline.pose_net_v2 import PoseNetV2
 
 
 # Load central config
@@ -75,9 +81,31 @@ if not 1 <= _raw_port <= 65535:
     raise ValueError(f"INFERENCE_WS_PORT={_raw_port} is out of the valid range 1-65535")
 INFERENCE_PORT = _raw_port
 DEVICE         = os.getenv("INFERENCE_DEVICE", "auto")
+_EXPECTED_NODES    = int(os.getenv("EXPECTED_NODES", "3"))
+_EXPECTED_AMP_SIZE = _EXPECTED_NODES * 64 * 16   # nodes × subcarriers × doppler_bins
 
 @asynccontextmanager
 async def lifespan(app):
+    global _ha_bridge, _matter_bridge
+
+    # Caregiver alert system (always starts — reads channels from .env)
+    await _webhook_manager.start()
+
+    # Home Assistant MQTT bridge (opt-in via HA_MQTT_BROKER env var)
+    ha_cfg = HAConfig.from_env()
+    if ha_cfg:
+        _ha_bridge = HomeAssistantBridge(ha_cfg)
+        await _ha_bridge.start()
+
+    # Matter protocol bridge (opt-in via MATTER_ENABLED=true)
+    _matter_bridge = MatterBridge.from_env()
+    if _matter_bridge:
+        await _matter_bridge.start()
+
+    # LoRA fast-adapter (opt-in via LORA_ADAPT=true)
+    if os.getenv("LORA_ADAPT", "").lower() == "true":
+        _init_fast_adapter()
+
     task = asyncio.create_task(aggregator_loop())
     yield
     task.cancel()
@@ -85,6 +113,11 @@ async def lifespan(app):
         await task
     except asyncio.CancelledError:
         pass
+    await _webhook_manager.stop()
+    if _ha_bridge:
+        await _ha_bridge.stop()
+    if _matter_bridge:
+        await _matter_bridge.stop()
 
 
 app = FastAPI(title="RF-Mesh Inference", version="0.1.0", lifespan=lifespan)
@@ -127,6 +160,30 @@ _latest_analytics: dict = {}
 
 # Latest disaster snapshot (updated each inference cycle)
 _latest_disaster: dict = {}
+
+# ── Home Assistant MQTT bridge ────────────────────────────────────────
+_ha_bridge: HomeAssistantBridge | None = None
+
+# ── Matter protocol bridge ────────────────────────────────────────────
+_matter_bridge: MatterBridge | None = None
+
+# ── Caregiver alert / webhook manager ────────────────────────────────
+_webhook_manager = WebhookManager()
+
+# ── LoRA fast-adapt ───────────────────────────────────────────────────
+_fast_adapter: FastAdapter | None = None
+
+def _init_fast_adapter() -> None:
+    global _fast_adapter
+    _posenet = PoseNetV2()
+    ckpt = Path("models/pose_net.pt")
+    if ckpt.exists():
+        _posenet.load_state_dict(torch.load(ckpt, map_location="cpu", weights_only=True))
+    _fast_adapter = FastAdapter(
+        model=_posenet,
+        rank=int(os.getenv("LORA_RANK", "8")),
+        device="cpu",
+    )
 
 class ConnectionManager:
     """Thread-safe WebSocket connection manager."""
@@ -333,7 +390,27 @@ async def connect_and_process(fusion_pipeline):
                 })
 
                 await manager.broadcast(payload)
-                
+
+                # Home Assistant MQTT publish
+                if _ha_bridge:
+                    await _ha_bridge.publish(analytics, len(smoothed_skeletons))
+
+                # Matter protocol publish (Apple Home / Google Home / Alexa)
+                if _matter_bridge:
+                    await _matter_bridge.publish(analytics, len(smoothed_skeletons))
+
+                # Caregiver alerts (fall, inactivity, vitals, presence)
+                await _webhook_manager.process_frame(analytics, len(smoothed_skeletons))
+
+                # Push raw CSI into LoRA adapter buffer for future /adapt calls
+                if _fast_adapter is not None:
+                    for f in bundle.get("frames", []):
+                        amps = np.array(f.get("amplitudes", []), dtype=np.float32)
+                        if amps.size == _EXPECTED_AMP_SIZE:
+                            _fast_adapter.push_frame(
+                                torch.from_numpy(amps.reshape(_EXPECTED_NODES, 64, 16))
+                            )
+
                 # Observability updates
                 latency_ms = (time.time() - start_time) * 1000
                 sys_metrics.record_inference(latency_ms, mean_conf)
@@ -395,8 +472,12 @@ async def analytics(request: Request, _: None = Depends(verify_api_key)):
 
 
 @app.get("/tactical")
-async def tactical(request: Request, _: None = Depends(verify_api_key)):
-    """Return the latest tactical analytics snapshot."""
+async def tactical(
+    request: Request,
+    _key:   None = Depends(verify_api_key),
+    _tier:  None = Depends(require_tier(LicenseTier.ENTERPRISE)),
+):
+    """Return the latest tactical analytics snapshot. Requires Enterprise license."""
     await limiter.check_rate_limit(_client_ip(request))
     return _latest_tactical or {"status": "no_data"}
 
@@ -406,6 +487,137 @@ async def disaster(request: Request, _: None = Depends(verify_api_key)):
     """Return the latest disaster-response analytics snapshot."""
     await limiter.check_rate_limit(_client_ip(request))
     return _latest_disaster or {"status": "no_data"}
+
+
+@app.post("/webhooks/register")
+async def webhook_register(request: Request, _: None = Depends(verify_api_key)):
+    """Register a webhook URL to receive caregiver alerts.
+
+    Body: { "url": "https://...", "name": "My Phone", "events": ["fall_detected"], "secret": "opt" }
+    Events: fall_detected | person_entered | person_left | inactivity_alert |
+            health_alert | vitals_critical | anomaly
+    """
+    await limiter.check_rate_limit(_client_ip(request))
+    body = await request.json()
+    if "url" not in body:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="'url' is required")
+    wid = _webhook_manager.register(
+        url=body["url"],
+        name=body.get("name", ""),
+        events=set(body.get("events", [])),
+        secret=body.get("secret"),
+    )
+    return {"id": wid, "status": "registered"}
+
+
+@app.get("/webhooks")
+async def webhook_list(request: Request, _: None = Depends(verify_api_key)):
+    """List all registered webhook endpoints and active alert channels."""
+    await limiter.check_rate_limit(_client_ip(request))
+    return {
+        "webhooks": _webhook_manager.list_webhooks(),
+        "channels": _webhook_manager.channel_summary(),
+    }
+
+
+@app.delete("/webhooks/{webhook_id}")
+async def webhook_delete(webhook_id: str, request: Request, _: None = Depends(verify_api_key)):
+    """Remove a registered webhook by ID."""
+    await limiter.check_rate_limit(_client_ip(request))
+    removed = _webhook_manager.unregister(webhook_id)
+    return {"status": "removed" if removed else "not_found"}
+
+
+@app.get("/status/caregiver")
+async def caregiver_status(request: Request):
+    """Quick caregiver dashboard — no auth required, safe to expose.
+
+    Returns last activity time, person count, vitals, and alert channel status.
+    """
+    await limiter.check_rate_limit(_client_ip(request))
+    analytics = _latest_analytics or {}
+    vitals = (analytics.get("vitals") or {})
+    hr = (vitals.get("heart_rate") or {}).get("heart_rate")
+    rr = (vitals.get("respiratory_rate") or {}).get("respiratory_rate")
+    channels = _webhook_manager.channel_summary()
+    return {
+        "person_detected":      channels["last_activity_ago_s"] < 30,
+        "last_activity_ago_s":  channels["last_activity_ago_s"],
+        "heart_rate":           round(hr, 1) if hr else None,
+        "respiratory_rate":     round(rr, 1) if rr else None,
+        "activity":             (analytics.get("activity") or {}).get("activity"),
+        "fall_detected":        (analytics.get("fall") or {}).get("fall_detected", False),
+        "alert_channels":       {k: v for k, v in channels.items() if k != "last_activity_ago_s"},
+    }
+
+
+@app.get("/license")
+async def license_info(request: Request):
+    """Return the active license tier. No auth required — safe to expose publicly."""
+    await limiter.check_rate_limit(_client_ip(request))
+    from security import get_license_tier, _LICENSE_MODE
+    tier = get_license_tier()
+    return {
+        "tier":  tier.name,
+        "label": tier.label(),
+        "mode":  _LICENSE_MODE,
+        "features": {
+            "basic_analytics": True,
+            "ha_mqtt":         True,
+            "matter":          True,
+            "fast_adapt":      tier >= LicenseTier.PROFESSIONAL,
+            "tactical":        tier >= LicenseTier.ENTERPRISE,
+            "defense_modules": tier >= LicenseTier.DEFENSE,
+        },
+    }
+
+
+@app.get("/matter/pairing")
+async def matter_pairing(request: Request):
+    """Return the Matter commissioning QR code and manual pairing code.
+
+    Scan the QR code in Apple Home, Google Home, or the Alexa app to add
+    EchoPose as a native Matter sensor hub. Only needs to be done once.
+    """
+    await limiter.check_rate_limit(_client_ip(request))
+    if _matter_bridge is None:
+        return {"status": "disabled", "detail": "Start server with MATTER_ENABLED=true"}
+    return await _matter_bridge.get_pairing()
+
+
+@app.get("/matter/status")
+async def matter_status(request: Request):
+    """Return Matter bridge status and commissioning state."""
+    await limiter.check_rate_limit(_client_ip(request))
+    if _matter_bridge is None:
+        return {"status": "disabled"}
+    return await _matter_bridge.get_status()
+
+
+@app.post("/adapt")
+async def adapt(
+    request: Request,
+    _key:   None = Depends(verify_api_key),
+    _tier:  None = Depends(require_tier(LicenseTier.PROFESSIONAL)),
+):
+    """Trigger a 30-second self-supervised LoRA adaptation to the current room.
+
+    Requires LORA_ADAPT=true at startup. Uses the last ~500 buffered CSI frames.
+    """
+    await limiter.check_rate_limit(_client_ip(request))
+    if _fast_adapter is None:
+        return {"status": "disabled", "detail": "Start server with LORA_ADAPT=true to enable"}
+    if _fast_adapter.buffer_size < 16:
+        return {"status": "insufficient_data", "frames": _fast_adapter.buffer_size}
+
+    timeout = float(request.query_params.get("timeout", "30"))
+    timeout = max(5.0, min(120.0, timeout))
+
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: _fast_adapter.adapt(timeout_seconds=timeout)
+    )
+    return result
 
 
 if __name__ == "__main__":

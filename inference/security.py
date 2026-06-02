@@ -1,17 +1,34 @@
 """
-inference/security.py — Enterprise Security Hardening (Feature 24)
+inference/security.py — Enterprise Security Hardening
 
-Wraps the FastAPI server and WebSocket endpoints with strict rate limiting,
-payload validation, and TLS encryption readiness.
+Covers:
+  - Rate limiting (token bucket)
+  - API key validation (X-EchoPose-Token)
+  - License tier enforcement (X-EchoPose-License)
+  - Payload validation (Pydantic)
+  - Session encryption (Fernet / AES-256)
+
+License tiers (set via ECHOPOSE_LICENSE_KEY env var):
+  COMMUNITY   — no key required; basic pose + analytics
+  PROFESSIONAL — key required; + fast adapt, gait biometrics
+  ENTERPRISE  — key required; + full tactical suite
+  DEFENSE     — key required; + weapon detection, classified modules
 """
 
-from fastapi import Request, HTTPException, Security
+from __future__ import annotations
+
+from fastapi import Request, HTTPException, Security, Depends
 from fastapi.security import APIKeyHeader
-from typing import Callable
+from typing import Callable, Optional
 import asyncio
-import time
+import enum
+import hashlib
+import hmac
 import os
 import json
+import re
+import secrets
+import time
 from pydantic import BaseModel, model_validator
 import logging
 from cryptography.fernet import Fernet
@@ -36,6 +53,110 @@ VALID_TOKENS = {_raw_token} if _raw_token else set()
 
 # H3: In dev mode (no token set, not production), disable auth so endpoints aren't locked out
 _DEV_AUTH_DISABLED = not _raw_token and not _is_production
+
+# ── License Tier System ────────────────────────────────────────────────────────
+
+class LicenseTier(enum.IntEnum):
+    """Feature tiers in ascending order of capability."""
+    COMMUNITY    = 0   # No key required — basic pose + analytics
+    PROFESSIONAL = 1   # Fast adapt, gait biometrics, HA/Matter
+    ENTERPRISE   = 2   # Full tactical suite, multi-site
+    DEFENSE      = 3   # Weapon detection, classified modules
+
+    @classmethod
+    def from_short(cls, short: str) -> "LicenseTier":
+        _MAP = {"CM": cls.COMMUNITY, "PR": cls.PROFESSIONAL, "EN": cls.ENTERPRISE, "DF": cls.DEFENSE}
+        t = _MAP.get(short.upper())
+        if t is None:
+            raise ValueError(f"Unknown tier code: {short}")
+        return t
+
+    def label(self) -> str:
+        return self.name.title()
+
+
+# Key format:  EP-{TIER}-{8-char-id}-{8-char-hmac}
+# Example:     EP-PR-A1B2C3D4-E5F6G7H8
+_LICENSE_KEY_RE = re.compile(r"^EP-(CM|PR|EN|DF)-([A-Z0-9]{8})-([A-Z0-9]{8})$")
+
+_LICENSE_SECRET = os.getenv("ECHOPOSE_LICENSE_SECRET", "dev-secret-change-me")
+_LICENSE_MODE   = os.getenv("ECHOPOSE_LICENSE_MODE", "permissive").lower()
+# "permissive" = log warnings but never block (good for dev)
+# "enforced"   = reject requests that exceed the tier
+
+
+def _compute_hmac(tier_short: str, key_id: str) -> str:
+    """Return first 8 uppercase hex chars of HMAC-SHA256(tier:id, secret)."""
+    msg = f"{tier_short}:{key_id}".encode()
+    sig = hmac.new(_LICENSE_SECRET.encode(), msg, hashlib.sha256).hexdigest()
+    return sig[:8].upper()
+
+
+def verify_license_key(key: str) -> LicenseTier:
+    """Validate a license key string and return its tier.
+
+    Raises ValueError with a user-readable message on failure.
+    """
+    m = _LICENSE_KEY_RE.match(key.strip().upper())
+    if not m:
+        raise ValueError(
+            "Invalid license key format. Expected EP-{TIER}-{ID}-{HMAC}. "
+            "Purchase a key at https://echopose.io/license"
+        )
+    tier_short, key_id, provided_hmac = m.group(1), m.group(2), m.group(3)
+    expected_hmac = _compute_hmac(tier_short, key_id)
+    if not hmac.compare_digest(provided_hmac, expected_hmac):
+        raise ValueError("License key signature is invalid. Contact support.")
+    return LicenseTier.from_short(tier_short)
+
+
+# Parse the license key at startup
+_raw_license_key = os.getenv("ECHOPOSE_LICENSE_KEY", "").strip()
+_active_tier: LicenseTier = LicenseTier.COMMUNITY
+
+if _raw_license_key:
+    try:
+        _active_tier = verify_license_key(_raw_license_key)
+        logger.info("License key accepted — tier: %s", _active_tier.label())
+    except ValueError as _lic_err:
+        if _LICENSE_MODE == "enforced":
+            raise RuntimeError(f"License key rejected: {_lic_err}")
+        logger.warning("License key invalid (%s) — running as Community tier", _lic_err)
+else:
+    if _is_production and _LICENSE_MODE == "enforced":
+        logger.warning(
+            "No ECHOPOSE_LICENSE_KEY set in enforced mode. "
+            "Restricted features will return 402. Buy at https://echopose.io/license"
+        )
+
+
+def get_license_tier() -> LicenseTier:
+    """Return the active license tier for this deployment."""
+    return _active_tier
+
+
+def require_tier(minimum: LicenseTier):
+    """FastAPI dependency factory — raises 402 if active tier is below minimum.
+
+    Usage:
+        @app.get("/adapt")
+        async def adapt(_: None = Depends(require_tier(LicenseTier.PROFESSIONAL))):
+            ...
+    """
+    def _check():
+        if _LICENSE_MODE != "enforced":
+            return  # permissive mode — never block
+        if _active_tier < minimum:
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    f"This feature requires a {minimum.label()} license or higher. "
+                    f"Your active tier: {_active_tier.label()}. "
+                    "Purchase a license at https://echopose.io/license"
+                ),
+            )
+    return _check
+
 
 class RateLimiter:
     """Token Bucket rate limiter to prevent DoS attacks on the inference pipeline"""
