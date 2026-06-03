@@ -21,6 +21,7 @@
       <div id="status-badge" class="badge badge--disconnected">Disconnected</div>
       <div class="stat-pill"><span id="fps-display">0</span> <span class="stat-label">Hz</span></div>
       <div class="stat-pill"><span id="node-count">0</span> <span class="stat-label">nodes</span></div>
+      <button id="btn-smarthome" class="ctrl-btn smarthome-btn" title="Smart Home setup (Matter / Home Assistant)">&#x1F3E0; Smart Home</button>
     </div>
   </header>
 
@@ -337,6 +338,81 @@
         <button id="btn-close-modal" style="flex: 1; background: var(--surface2); color: var(--text);">Play Demo</button>
       </div>
       <p id="connect-error" class="error-msg"></p>
+    </div>
+  </div>
+
+  <!-- ── Smart Home Modal ────────────────────────────── -->
+  <div id="smarthome-modal" class="modal" style="display:none;">
+    <div class="modal-box" style="max-width:520px;width:92vw;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="margin:0;">Smart Home Setup</h2>
+        <button id="btn-smarthome-close" class="ctrl-btn" style="padding:4px 10px;">✕</button>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="sh-tabs" style="display:flex;gap:6px;margin-bottom:16px;">
+        <button class="sh-tab sh-tab--active" data-tab="matter">Matter</button>
+        <button class="sh-tab" data-tab="homeassistant">Home Assistant</button>
+      </div>
+
+      <!-- Matter tab -->
+      <div id="sh-tab-matter" class="sh-tab-content">
+        <p style="color:#aaa;font-size:.85em;margin-bottom:14px;">
+          Pair EchoPose with <strong>Apple Home</strong>, <strong>Google Home</strong>, or <strong>Amazon Alexa</strong>
+          using the Matter protocol. Scan once — pairing is permanent.
+        </p>
+        <div id="sh-matter-status" style="margin-bottom:12px;"></div>
+
+        <!-- QR code display -->
+        <div id="sh-qr-wrap" style="display:none;text-align:center;margin-bottom:12px;">
+          <img id="sh-qr-img" alt="Matter QR code" style="width:200px;height:200px;border-radius:8px;border:2px solid var(--border);" />
+          <div style="margin-top:8px;font-size:.8em;color:#aaa;">Scan in Apple Home / Google Home / Alexa app</div>
+          <div style="margin-top:6px;">
+            <span style="font-size:.75em;color:#aaa;">Manual code: </span>
+            <code id="sh-manual-code" style="font-size:.85em;color:var(--accent);letter-spacing:.1em;"></code>
+          </div>
+        </div>
+
+        <!-- Commissioned state -->
+        <div id="sh-commissioned-badge" style="display:none;text-align:center;padding:12px;background:rgba(0,200,100,.1);border:1px solid rgba(0,200,100,.3);border-radius:8px;margin-bottom:12px;">
+          <span style="color:#00c864;font-size:1.1em;">&#x2713; Commissioned</span>
+          <div style="font-size:.8em;color:#aaa;margin-top:4px;">EchoPose is paired with your smart home platform</div>
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button id="btn-matter-refresh" class="ctrl-btn" style="flex:1;">Load Pairing Info</button>
+          <a id="btn-matter-open" href="#" target="_blank" class="ctrl-btn" style="flex:1;text-align:center;text-decoration:none;display:none;">Open in Browser</a>
+        </div>
+        <p id="sh-matter-error" style="color:var(--danger);font-size:.8em;margin-top:8px;display:none;"></p>
+        <p style="font-size:.75em;color:#666;margin-top:12px;">
+          Requires <code>MATTER_ENABLED=true</code> in your <code>.env</code> and Node.js ≥18.
+        </p>
+      </div>
+
+      <!-- Home Assistant tab -->
+      <div id="sh-tab-homeassistant" class="sh-tab-content" style="display:none;">
+        <p style="color:#aaa;font-size:.85em;margin-bottom:14px;">
+          EchoPose auto-discovers in Home Assistant via MQTT. All sensors appear automatically — no YAML needed.
+        </p>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:.82em;margin-bottom:12px;">
+          <div style="color:#aaa;margin-bottom:8px;">Add to your <code>.env</code>:</div>
+          <pre style="margin:0;color:var(--accent);line-height:1.6;">HA_MQTT_BROKER=192.168.1.10
+HA_MQTT_PORT=1883
+HA_MQTT_USERNAME=   # optional
+HA_MQTT_PASSWORD=   # optional</pre>
+        </div>
+        <div style="font-size:.82em;color:#aaa;">
+          <strong style="color:#ddd;">Sensors published:</strong>
+          <ul style="margin:8px 0 0 0;padding-left:18px;line-height:1.8;">
+            <li>Presence (binary_sensor)</li>
+            <li>Person Count, Heart Rate, Respiratory Rate, SpO2</li>
+            <li>Activity, Gait Speed, Gesture, Sleep Stage</li>
+            <li>Stress Score, Fall Detected (expires 30 s), Anomaly</li>
+            <li>Health Alert</li>
+          </ul>
+        </div>
+        <div id="sh-ha-status" style="margin-top:12px;font-size:.82em;"></div>
+      </div>
     </div>
   </div>
 

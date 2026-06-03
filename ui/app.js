@@ -579,3 +579,140 @@ btnReset.addEventListener('click', () => skeleton.resetCamera());
 // ── Entry point ───────────────────────────────────────────────────
 // Auto-connect using the current hostname so this works in production/remote deploys
 connect(`ws://${window.location.hostname}:8765/ws/pose`);
+
+// ── Smart Home Modal ──────────────────────────────────────────────
+(function () {
+  const modal    = document.getElementById('smarthome-modal');
+  const btnOpen  = document.getElementById('btn-smarthome');
+  const btnClose = document.getElementById('btn-smarthome-close');
+  if (!modal || !btnOpen) return;
+
+  // Derive inference server base URL from the current WS URI input
+  function inferenceBase() {
+    try {
+      const wsUrl = new URL(wsUriInput.value.trim());
+      return `${wsUrl.protocol === 'wss:' ? 'https' : 'http'}://${wsUrl.hostname}:${wsUrl.port || 8765}`;
+    } catch (_) {
+      return `http://${window.location.hostname}:8765`;
+    }
+  }
+
+  // ── Tab switching ──────────────────────────────────────────────
+  document.querySelectorAll('.sh-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.sh-tab').forEach(t => t.classList.remove('sh-tab--active'));
+      document.querySelectorAll('.sh-tab-content').forEach(c => c.style.display = 'none');
+      tab.classList.add('sh-tab--active');
+      const target = document.getElementById(`sh-tab-${tab.dataset.tab}`);
+      if (target) target.style.display = '';
+    });
+  });
+
+  // ── Matter tab ─────────────────────────────────────────────────
+  const statusEl       = document.getElementById('sh-matter-status');
+  const qrWrap         = document.getElementById('sh-qr-wrap');
+  const qrImg          = document.getElementById('sh-qr-img');
+  const manualCode     = document.getElementById('sh-manual-code');
+  const commBadge      = document.getElementById('sh-commissioned-badge');
+  const btnRefresh     = document.getElementById('btn-matter-refresh');
+  const btnOpenLink    = document.getElementById('btn-matter-open');
+  const errEl          = document.getElementById('sh-matter-error');
+
+  function setStatus(msg, color) {
+    if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || '#aaa'; }
+  }
+  function showError(msg) {
+    if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
+  }
+  function clearError() {
+    if (errEl) errEl.style.display = 'none';
+  }
+
+  async function loadMatterPairing() {
+    setStatus('Loading…', '#aaa');
+    clearError();
+    try {
+      const base = inferenceBase();
+      const res  = await fetch(`${base}/matter/pairing`, { signal: AbortSignal.timeout(6000) });
+
+      if (res.status === 404 || res.status === 503) {
+        setStatus('Matter bridge not reachable', '#888');
+        showError('Make sure the server started with MATTER_ENABLED=true');
+        return;
+      }
+      if (!res.ok) {
+        setStatus('', '');
+        showError(`Server returned ${res.status}`);
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.status === 'disabled') {
+        setStatus('Matter is disabled', '#888');
+        showError(data.detail || 'Set MATTER_ENABLED=true in .env and restart');
+        return;
+      }
+      if (data.error) {
+        setStatus('Bridge not ready', '#888');
+        showError(data.error);
+        return;
+      }
+
+      // Commissioned state
+      if (data.commissioned) {
+        setStatus('', '');
+        if (commBadge) commBadge.style.display = '';
+        if (qrWrap)    qrWrap.style.display    = 'none';
+      } else {
+        if (commBadge) commBadge.style.display = 'none';
+        if (data.qrCodeDataUrl) {
+          qrImg.src = data.qrCodeDataUrl;
+          if (qrWrap) qrWrap.style.display = '';
+        }
+        if (manualCode) manualCode.textContent = data.manualPairingCode || '';
+        setStatus('Ready to pair — scan the QR code below', '#00c864');
+      }
+
+      // Open-in-browser link for the pairing page
+      if (btnOpenLink) {
+        const pairingUrl = `${inferenceBase()}/matter/pairing`;
+        btnOpenLink.href = pairingUrl;
+        btnOpenLink.style.display = '';
+      }
+
+    } catch (err) {
+      setStatus('Could not reach inference server', '#e05');
+      showError(err.message || String(err));
+    }
+  }
+
+  if (btnRefresh) btnRefresh.addEventListener('click', loadMatterPairing);
+
+  // ── Home Assistant status ──────────────────────────────────────
+  async function loadHAStatus() {
+    const haStatusEl = document.getElementById('sh-ha-status');
+    if (!haStatusEl) return;
+    try {
+      const base = inferenceBase();
+      const res  = await fetch(`${base}/health`, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) { haStatusEl.textContent = ''; return; }
+      haStatusEl.innerHTML = '<span style="color:#00c864;">&#x2713; Inference server is running</span> — HA sensors will appear automatically once broker is configured.';
+    } catch (_) {
+      haStatusEl.textContent = '';
+    }
+  }
+
+  // ── Modal open/close ───────────────────────────────────────────
+  btnOpen.addEventListener('click', () => {
+    modal.style.display = 'flex';
+    loadMatterPairing();
+    loadHAStatus();
+  });
+
+  btnClose.addEventListener('click', () => { modal.style.display = 'none'; });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  });
+}());

@@ -387,3 +387,34 @@ body {
 .intent-bar {
   background: linear-gradient(90deg, #22c55e, #eab308, #ef4444) !important;
 }
+
+/* ── Smart Home button & modal ──────────────────────── */
+.smarthome-btn {
+  background: linear-gradient(135deg, rgba(56,189,248,.15), rgba(129,140,248,.15));
+  border: 1px solid rgba(56,189,248,.3);
+  color: var(--accent);
+  font-size: .8em;
+  padding: 4px 10px;
+  margin-left: 8px;
+}
+.smarthome-btn:hover {
+  background: linear-gradient(135deg, rgba(56,189,248,.25), rgba(129,140,248,.25));
+}
+
+/* Smart Home tabs */
+.sh-tab {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 5px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .82em;
+  transition: all .15s;
+}
+.sh-tab:hover { color: var(--text); }
+.sh-tab--active {
+  background: rgba(56,189,248,.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
