@@ -1,0 +1,19 @@
+{
+  "name": "echopose-matter-bridge",
+  "version": "1.0.0",
+  "description": "Matter protocol bridge for EchoPose WiFi CSI — exposes sensors to Apple Home, Google Home, and Amazon Alexa",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/bridge.js",
+    "dev": "node --watch src/bridge.js"
+  },
+  "dependencies": {
+    "@matter/main": "0.12.2",
+    "@matter/nodejs": "0.12.2",
+    "express": "^4.18.0",
+    "qrcode": "^1.5.3"
+  }
+}
