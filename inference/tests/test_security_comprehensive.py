@@ -115,7 +115,7 @@ class TestVerifyApiKey:
 
 class TestRateLimiterAsync:
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def test_allows_up_to_limit(self):
         from security import RateLimiter
@@ -157,7 +157,7 @@ class TestRateLimiterAsync:
             tasks = [rl.check_rate_limit("concurrent") for _ in range(10)]
             return await asyncio.gather(*tasks, return_exceptions=True)
 
-        results = asyncio.get_event_loop().run_until_complete(_burst())
+        results = asyncio.run(_burst())
         errors = [r for r in results if isinstance(r, Exception)]
         assert len(errors) == 0  # all 10 within limit of 100
 

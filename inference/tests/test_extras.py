@@ -65,19 +65,26 @@ def test_pose_estimator_accepts_per_person():
 
 def test_rate_limiter_allows_normal_traffic():
     rl = RateLimiter(requests_per_second=10)
-    for _ in range(10):
-        assert asyncio.get_event_loop().run_until_complete(rl.check_rate_limit("127.0.0.1"))
+
+    async def _burst():
+        for _ in range(10):
+            assert await rl.check_rate_limit("127.0.0.1")
+
+    asyncio.run(_burst())
 
 
 def test_rate_limiter_blocks_excess():
     from fastapi import HTTPException
     rl = RateLimiter(requests_per_second=3)
-    loop = asyncio.get_event_loop()
-    for _ in range(3):
-        loop.run_until_complete(rl.check_rate_limit("10.0.0.1"))
-    with pytest.raises(HTTPException) as exc:
-        loop.run_until_complete(rl.check_rate_limit("10.0.0.1"))
-    assert exc.value.status_code == 429
+
+    async def _burst():
+        for _ in range(3):
+            await rl.check_rate_limit("10.0.0.1")
+        with pytest.raises(HTTPException) as exc:
+            await rl.check_rate_limit("10.0.0.1")
+        assert exc.value.status_code == 429
+
+    asyncio.run(_burst())
 
 
 def test_incoming_csi_bundle_valid():
