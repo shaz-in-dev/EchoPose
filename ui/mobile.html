@@ -1016,7 +1016,7 @@ function handleFrame(data) {
 
   const occ = data.analytics?.occupancy;
   if (occ) {
-    const count = Number(occ.count ?? 0);
+    const count = Number(occ.num_people ?? occ.count ?? 0);
     const peopleEl = document.getElementById('m-people');
     if (peopleEl) {
       peopleEl.textContent = '';
@@ -1036,14 +1036,16 @@ function applyAnalytics(a) {
   const hr   = v.heart_rate?.heart_rate;
   const rr   = v.respiratory_rate?.respiratory_rate;
   const spo2 = v.spo2?.spo2;
-  const temp = v.temperature?.temperature;
+  const temp = v.temperature?.temperature_c ?? v.temperature?.temperature;
   const bp   = v.blood_pressure;
 
   set('m-hr', fmt(hr));          set('m-hr-quick', fmt(hr));
   set('m-rr', fmt(rr));          set('m-rr-quick', fmt(rr));
   set('m-spo2', fmt(spo2));
   set('m-temp', fmt(temp, 1));
-  set('m-bp', bp ? `${fmt(bp.systolic)}/${fmt(bp.diastolic)}` : '--/--');
+  set('m-bp', bp && bp.systolic_mmhg != null
+    ? `${fmt(bp.systolic_mmhg, 0)}/${fmt(bp.diastolic_mmhg, 0)}`
+    : '--/--');
 
   // HR status
   if (hr != null) {
@@ -1061,12 +1063,16 @@ function applyAnalytics(a) {
   set('m-activity-conf', `Confidence: ${actConf}`);
   set('m-activity-conf-quick', actConf);
 
-  // Gait
+  // Gait — server keys: walking_speed_ms / cadence_steps_min / stride_length_m / gait_symmetry
   const g = a.gait || {};
-  const speed    = g.speed    != null ? `${fmt(g.speed, 1)}` : '--';
-  const cadence  = g.cadence  != null ? `${fmt(g.cadence, 0)}` : '--';
-  const stride   = g.stride_length != null ? `${fmt(g.stride_length, 2)}` : '--';
-  const sym      = g.symmetry != null ? `${fmt(g.symmetry * 100, 0)}%` : '--%';
+  const gSpeed   = g.walking_speed_ms  ?? g.speed;
+  const gCadence = g.cadence_steps_min ?? g.cadence;
+  const gStride  = g.stride_length_m   ?? g.stride_length;
+  const gSym     = g.gait_symmetry     ?? g.symmetry;
+  const speed    = gSpeed   != null ? `${fmt(gSpeed, 1)}` : '--';
+  const cadence  = gCadence != null ? `${fmt(gCadence, 0)}` : '--';
+  const stride   = gStride  != null ? `${fmt(gStride, 2)}` : '--';
+  const sym      = gSym     != null ? `${fmt(gSym * 100, 0)}%` : '--%';
   (function() {
     function setValueWithUnit(id, value, unit) {
       const el = document.getElementById(id);
@@ -1087,7 +1093,7 @@ function applyAnalytics(a) {
   // Fall
   const fall = a.fall || {};
   const fell = fall.fall_detected;
-  const risk = (fall.risk_level ?? 'low').toLowerCase();
+  const risk = (fall.fall_risk ?? fall.risk_level ?? 'low').toLowerCase();
   const bal  = fall.balance_score != null ? `${fmt(fall.balance_score * 100, 0)}%` : '--';
   const fallStatus1 = document.getElementById('m-fall-status');
   const fallStatus2 = document.getElementById('m-fall-status-act');
@@ -1106,7 +1112,7 @@ function applyAnalytics(a) {
   set('m-gest-right', gest.right_hand ?? gest.right ?? 'idle');
 
   // Sleep
-  set('m-sleep', (a.sleep?.stage ?? '--').toUpperCase());
+  set('m-sleep', (a.sleep?.sleep_stage ?? a.sleep?.stage ?? '--').toUpperCase());
 
   // Occupancy
   const occ = a.occupancy || {};
@@ -1160,7 +1166,7 @@ function applyTactical(t) {
   threatEl.className   = `threat-level-big ${threatLevel.toLowerCase()}`;
   quickEl.textContent  = threatLevel;
   quickEl.className    = `metric-tile-value ${threatLevel === 'RED' ? 'c-red' : threatLevel === 'YELLOW' ? 'c-yellow' : 'c-green'}`;
-  set('m-threat-sub', `${tgt.target_count ?? 0} targets detected`);
+  set('m-threat-sub', `${tgt.targets_detected ?? tgt.target_count ?? 0} targets detected`);
 
   // Weapon
   const weap = t.weapon || {};
@@ -1190,7 +1196,7 @@ function applyTactical(t) {
   // Intent
   const intent = t.intent || {};
   const intentLabel = (intent.intent ?? 'NORMAL').toUpperCase();
-  const prob  = (intent.attack_probability ?? 0) * 100;
+  const prob  = ((intent.scores && intent.scores.attack) ?? intent.attack_probability ?? 0) * 100;
   const intentEl = document.getElementById('m-intent');
   intentEl.textContent = intentLabel;
   intentEl.className   = `intent-label ${intentLabel === 'ATTACK_IMMINENT' ? 'c-red' : intentLabel !== 'NORMAL' ? 'c-yellow' : 'c-green'}`;
@@ -1321,6 +1327,62 @@ setInterval(pollNodes, 2000);
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+
+// ── Caregiver status polling (/status/caregiver — no auth needed) ───
+// Keeps the quick-view card in sync even when the WebSocket is offline.
+async function pollCaregiverStatus() {
+  try {
+    const uri    = document.getElementById('m-ws-uri').value.trim();
+    const wsUrl  = new URL(uri);
+    const base   = `${wsUrl.protocol === 'wss:' ? 'https' : 'http'}://${wsUrl.hostname}:${wsUrl.port || 8765}`;
+    const res    = await fetch(`${base}/status/caregiver`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return;
+    const s = await res.json();
+
+    // Last activity
+    const agoEl = document.getElementById('m-last-activity');
+    if (agoEl) {
+      const ago = s.last_activity_ago_s;
+      agoEl.textContent = ago < 60
+        ? `${ago}s ago`
+        : ago < 3600
+          ? `${Math.round(ago / 60)}m ago`
+          : `${(ago / 3600).toFixed(1)}h ago`;
+      agoEl.style.color = ago > 14400 ? 'var(--danger)' : ago > 3600 ? 'var(--warn)' : 'var(--accent3)';
+    }
+
+    // Person presence dot in header
+    const presEl = document.getElementById('m-presence-dot');
+    if (presEl) {
+      presEl.style.background = s.person_detected ? 'var(--accent3)' : 'var(--muted)';
+      presEl.title = s.person_detected ? 'Someone is home' : 'Room is empty';
+    }
+
+    // Fall alert banner
+    const fallBanner = document.getElementById('m-fall-banner');
+    if (fallBanner) {
+      fallBanner.style.display = s.fall_detected ? '' : 'none';
+    }
+
+    // Quick vitals in caregiver overview (if present on current page)
+    const hrEl = document.getElementById('m-quick-hr');
+    if (hrEl) hrEl.textContent = s.heart_rate != null ? `${s.heart_rate} bpm` : '--';
+    const actEl = document.getElementById('m-quick-activity');
+    if (actEl) actEl.textContent = s.activity || '--';
+
+    // Alert channels indicator
+    const chEl = document.getElementById('m-alert-channels');
+    if (chEl && s.alert_channels) {
+      const active = Object.values(s.alert_channels).filter(Boolean).length;
+      chEl.textContent = active > 0 ? `${active} alert channel${active > 1 ? 's' : ''} active` : 'No alert channels';
+      chEl.style.color = active > 0 ? 'var(--accent3)' : 'var(--warn)';
+    }
+  } catch (_) {}
+}
+
+// Poll every 10 s — lightweight no-auth endpoint, safe to call frequently
+setInterval(pollCaregiverStatus, 10000);
+pollCaregiverStatus();
 
 // ── Auto-connect on load ──────────────────────────────────────────
 connect(document.getElementById('m-ws-uri').value);

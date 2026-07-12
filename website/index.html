@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EchoPose — Human sensing through WiFi. No cameras.</title>
+<meta name="description" content="EchoPose turns ordinary WiFi signals into real-time human presence, pose and safety analytics — with zero cameras and zero images. Fall detection, activity and sleep insight for homes and care." />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="EchoPose — Human sensing through WiFi. No cameras." />
+<meta property="og:description" content="Real-time presence, pose and safety analytics from ordinary WiFi signals. Zero cameras, zero images — fall detection and care insight that respects dignity." />
+<meta property="og:site_name" content="EchoPose" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="EchoPose — Human sensing through WiFi. No cameras." />
+<meta name="twitter:description" content="Real-time presence, pose and safety analytics from ordinary WiFi signals. Zero cameras, zero images." />
+<meta name="theme-color" content="#05080f" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23070b12'/><text x='96' y='130' font-family='sans-serif' font-size='100' font-weight='900' fill='%2338bdf8' text-anchor='middle'>EP</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg:      #05080f;
+  --surface: rgba(13, 20, 34, 0.55);
+  --border:  rgba(86, 170, 255, 0.14);
+  --accent:  #38bdf8;
+  --accent2: #818cf8;
+  --green:   #34d399;
+  --amber:   #fbbf24;
+  --text:    #e6edf6;
+  --muted:   #8fa3bd;
+  --display: 'Syne', sans-serif;
+  --sans:    'Inter', sans-serif;
+  --mono:    'JetBrains Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: auto; }
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: rgba(56,189,248,.35); }
+
+/* ── Loader ─────────────────────────────────────────── */
+#loader {
+  position: fixed; inset: 0; z-index: 1000;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 26px;
+}
+.loader-logo { font-family: var(--display); font-size: clamp(28px, 5vw, 44px); font-weight: 800; letter-spacing: -.02em; }
+.loader-logo span { color: var(--accent); }
+.loader-bar {
+  width: min(280px, 60vw); height: 2px;
+  background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden;
+}
+.loader-bar i {
+  display: block; height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 2px;
+}
+.loader-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .25em; text-transform: uppercase; }
+
+/* ── 3D canvas ──────────────────────────────────────── */
+#scene {
+  position: fixed; inset: 0; z-index: 0;
+  width: 100vw; height: 100vh; display: block;
+}
+
+/* ── Nav ────────────────────────────────────────────── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px clamp(20px, 5vw, 64px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: linear-gradient(rgba(5,8,15,.65), transparent);
+}
+.nav-logo { font-family: var(--display); font-weight: 800; font-size: 21px; letter-spacing: -.02em; color: var(--text); text-decoration: none; margin-right: 28px; }
+.nav-logo span { color: var(--accent); }
+.nav-links { display: flex; gap: clamp(14px, 3vw, 34px); align-items: center; }
+.nav-links a {
+  color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500;
+  letter-spacing: .06em; text-transform: uppercase;
+  transition: color .25s;
+}
+.nav-links a:hover { color: var(--text); }
+.nav-cta {
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 9px 20px !important; color: var(--accent) !important;
+  background: rgba(56,189,248,.08);
+  transition: background .25s, transform .25s;
+}
+.nav-cta:hover { background: rgba(56,189,248,.18); transform: translateY(-1px); }
+@media (max-width: 880px) { .nav-links a:not(.nav-cta) { display: none; } }
+
+/* ── Sections ───────────────────────────────────────── */
+main { position: relative; z-index: 10; pointer-events: none; }
+section {
+  min-height: 100vh;
+  display: flex; align-items: center;
+  padding: 0 clamp(20px, 7vw, 110px);
+  position: relative;
+}
+.copy { max-width: 620px; pointer-events: auto; }
+.copy.right { margin-left: auto; }
+.copy.center { margin: 0 auto; text-align: center; }
+
+.kicker {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .3em;
+  text-transform: uppercase; color: var(--accent);
+  display: inline-flex; align-items: center; gap: 10px; margin-bottom: 22px;
+}
+.kicker::before { content: ''; width: 26px; height: 1px; background: var(--accent); display: inline-block; }
+h1 {
+  font-family: var(--display); font-weight: 800;
+  font-size: clamp(44px, 8.5vw, 110px);
+  line-height: .98; letter-spacing: -.03em; margin-bottom: 28px;
+}
+h1 em { font-style: normal; color: var(--accent); }
+h2 {
+  font-family: var(--display); font-weight: 700;
+  font-size: clamp(34px, 5.5vw, 68px);
+  line-height: 1.02; letter-spacing: -.025em; margin-bottom: 22px;
+}
+h2 em { font-style: normal; color: var(--accent); }
+.lede { font-size: clamp(15px, 1.6vw, 19px); line-height: 1.65; color: var(--muted); font-weight: 300; max-width: 54ch; }
+.copy.center .lede { margin: 0 auto; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+.chip {
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .05em;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 8px 16px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.chip b { color: var(--accent); font-weight: 500; }
+
+.stat-row { display: flex; gap: clamp(24px, 4vw, 56px); margin-top: 38px; flex-wrap: wrap; }
+.stat .num { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.4vw, 42px); color: var(--text); }
+.stat .num span { color: var(--accent); font-size: .6em; }
+.stat .lbl { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; margin-top: 6px; }
+
+.btn-row { display: flex; gap: 14px; margin-top: 40px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--sans); font-weight: 600; font-size: 14px;
+  text-decoration: none; border-radius: 12px; padding: 15px 30px;
+  display: inline-flex; align-items: center; gap: 10px;
+  transition: transform .25s, box-shadow .25s, background .25s;
+}
+.btn-primary {
+  color: #04121d; background: linear-gradient(115deg, var(--accent), #6dd6ff);
+  box-shadow: 0 12px 36px rgba(56,189,248,.28);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 44px rgba(56,189,248,.4); }
+.btn-ghost { color: var(--text); border: 1px solid var(--border); background: var(--surface); backdrop-filter: blur(6px); }
+.btn-ghost:hover { background: rgba(56,189,248,.1); transform: translateY(-2px); }
+
+.scroll-hint {
+  position: absolute; bottom: 34px; left: 50%; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .3em;
+  text-transform: uppercase; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  pointer-events: none;
+}
+.scroll-hint::after {
+  content: ''; width: 1px; height: 42px;
+  background: linear-gradient(var(--accent), transparent);
+  animation: drip 1.8s ease-in-out infinite;
+}
+@keyframes drip { 0% { transform: scaleY(0); transform-origin: top; } 55% { transform: scaleY(1); transform-origin: top; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+
+/* feature cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-top: 36px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 22px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.card .ic { font-size: 22px; margin-bottom: 12px; }
+.card h3 { font-family: var(--display); font-size: 16px; font-weight: 700; margin-bottom: 8px; letter-spacing: -.01em; }
+.card p { font-size: 13px; line-height: 1.6; color: var(--muted); font-weight: 300; }
+
+/* footer */
+footer {
+  position: relative; z-index: 10;
+  padding: 60px clamp(20px, 7vw, 110px) 40px;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(transparent, rgba(5,8,15,.92) 30%);
+  display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-end; justify-content: space-between;
+}
+footer .f-left { max-width: 460px; }
+footer .nav-logo { font-size: 26px; }
+footer p { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin-top: 12px; font-weight: 300; }
+footer .f-links { display: flex; gap: 22px; }
+footer .f-links a { color: var(--muted); font-size: 13px; text-decoration: none; }
+footer .f-links a:hover { color: var(--accent); }
+.disclaimer { font-family: var(--mono); font-size: 10.5px !important; color: #5d7290 !important; letter-spacing: .03em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-hint::after { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Loader ─────────────────────────────────────────── -->
+<div id="loader">
+  <div class="loader-logo">Echo<span>Pose</span></div>
+  <div class="loader-bar"><i id="loader-fill"></i></div>
+  <div class="loader-sub" id="loader-label">calibrating radio field</div>
+</div>
+
+<!-- ── 3D scene ───────────────────────────────────────── -->
+<canvas id="scene"></canvas>
+
+<!-- ── Nav ────────────────────────────────────────────── -->
+<nav>
+  <a class="nav-logo" href="#hero">Echo<span>Pose</span></a>
+  <div class="nav-links">
+    <a href="#technology">Technology</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#care">Care</a>
+    <a href="#platform">Platform</a>
+    <a class="nav-cta" href="#contact">Get early access</a>
+  </div>
+</nav>
+
+<main id="scroll-container">
+
+  <!-- 1 · HERO -->
+  <section id="hero">
+    <div class="copy" data-reveal>
+      <div class="kicker">Human sensing · zero cameras</div>
+      <h1>See presence,<br/>not <em>people.</em></h1>
+      <p class="lede">
+        EchoPose turns the WiFi signals already moving through your rooms into live human
+        presence, posture and safety insight. No lenses. No images. Nothing to point at anyone.
+      </p>
+      <div class="btn-row">
+        <a class="btn btn-primary" href="#contact">Request early access</a>
+        <a class="btn btn-ghost" href="#technology">How it works ↓</a>
+      </div>
+    </div>
+    <div class="scroll-hint">scroll</div>
+  </section>
+
+  <!-- 2 · TECHNOLOGY -->
+  <section id="technology">
+    <div class="copy" data-reveal>
+      <div class="kicker">The technology</div>
+      <h2>Radio waves are<br/>the new <em>eyes.</em></h2>
+      <p class="lede">
+        Three small sensor nodes read Channel State Information — the way WiFi bends, reflects
+        and shifts as a human body moves through it. Our AI engine reconstructs a live
+        17-point skeletal pose from radio alone, at 20 measurements per second.
+      </p>
+      <div class="chips">
+        <span class="chip"><b>64</b> subcarriers / node</span>
+        <span class="chip"><b>20&nbsp;Hz</b> sensing rate</span>
+        <span class="chip"><b>17</b> joint skeleton</span>
+        <span class="chip"><b>3</b> node mesh</span>
+        <span class="chip">edge inference · <b>&lt;40&nbsp;ms</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · PRIVACY -->
+  <section id="privacy">
+    <div class="copy right" data-reveal>
+      <div class="kicker">Privacy first</div>
+      <h2>It even works<br/>through <em>walls.</em></h2>
+      <p class="lede">
+        Radio doesn't need line of sight — and it can't take a photograph.
+        EchoPose senses motion and posture through ordinary interior walls while remaining
+        physically incapable of capturing a face, a screen, or an image of any kind.
+        Raw signal data is processed on-device and discarded.
+      </p>
+      <div class="stat-row">
+        <div class="stat"><div class="num">0</div><div class="lbl">cameras · microphones</div></div>
+        <div class="stat"><div class="num">0</div><div class="lbl">images ever stored</div></div>
+        <div class="stat"><div class="num">100<span>%</span></div><div class="lbl">on-premise option</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · CARE -->
+  <section id="care">
+    <div class="copy" data-reveal>
+      <div class="kicker">Why it matters</div>
+      <h2>Dignified care for the people you <em>love.</em></h2>
+      <p class="lede">
+        An ageing parent who wants independence, not surveillance. EchoPose watches over the
+        room — not the person — and alerts caregivers the moment something is wrong.
+      </p>
+      <div class="cards">
+        <div class="card"><div class="ic">🚨</div><h3>Fall detection</h3><p>Sudden-collapse signatures trigger instant alerts to family, carers or staff.</p></div>
+        <div class="card"><div class="ic">🌙</div><h3>Sleep &amp; activity</h3><p>Daily rhythm, restlessness and inactivity windows — summarised, never filmed.</p></div>
+        <div class="card"><div class="ic">🫁</div><h3>Wellness signals</h3><p>Contactless breathing and heart-rate estimates from micro-motion.*</p></div>
+        <div class="card"><div class="ic">📲</div><h3>Caregiver alerts</h3><p>Push, SMS, Telegram and webhook notifications in seconds.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · PLATFORM -->
+  <section id="platform">
+    <div class="copy right" data-reveal>
+      <div class="kicker">The platform</div>
+      <h2>Built like infrastructure.<br/>Priced like a <em>subscription.</em></h2>
+      <p class="lede">
+        A real-time 3D dashboard, open REST + WebSocket APIs, and native bridges into
+        Home Assistant, Apple Home, Google Home and Alexa via Matter. Deploy in the cloud
+        or fully on-premise — your data never has to leave the building.
+      </p>
+      <div class="chips">
+        <span class="chip">Live 3D dashboard</span>
+        <span class="chip">REST + WebSocket API</span>
+        <span class="chip">Matter · Home Assistant</span>
+        <span class="chip">Docker · Kubernetes</span>
+        <span class="chip">On-premise licence</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · CTA -->
+  <section id="contact">
+    <div class="copy center" data-reveal>
+      <div class="kicker" style="justify-content:center">Early access</div>
+      <h2>The room is already<br/><em>listening.</em> Let it help.</h2>
+      <p class="lede">
+        We're onboarding pilot homes, care providers and integration partners now.
+        Tell us about your space and we'll design the sensing mesh with you.
+      </p>
+      <div class="btn-row" style="justify-content:center">
+        <a class="btn btn-primary" href="mailto:shazin2889@gmail.com?subject=EchoPose%20Early%20Access">Talk to the founder</a>
+        <a class="btn btn-ghost" href="https://github.com/shaz-in-dev/EchoPose" target="_blank" rel="noopener">View the project ↗</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="f-left">
+    <a class="nav-logo" href="#hero">Echo<span>Pose</span></a>
+    <p>WiFi-CSI human sensing — presence, pose and safety analytics with zero cameras.</p>
+    <p class="disclaimer">*Wellness estimates are indicative only. EchoPose is not a medical device and is not a substitute for emergency services or clinical monitoring.</p>
+  </div>
+  <div class="f-links">
+    <a href="mailto:shazin2889@gmail.com">Contact</a>
+    <a href="https://github.com/shaz-in-dev/EchoPose" target="_blank" rel="noopener">GitHub</a>
+    <a href="#privacy">Privacy</a>
+  </div>
+</footer>
+
+<!-- ── Libraries (CDN) ─────────────────────────────────── -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+
+<script>
+'use strict';
+/* ================================================================
+   EchoPose — 3D company landing
+   A procedural RF-sensing scene: a walking radio skeleton inside a
+   wireframe room, three sensor nodes emitting expanding CSI wave
+   rings, drifting signal particles, and a scroll-driven camera that
+   tours the space section by section.
+   ================================================================ */
+
+(function () {
+
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isMobile = Math.min(window.innerWidth, window.innerHeight) < 720;
+
+  /* ── Renderer / scene ──────────────────────────────────────── */
+  const canvas   = document.getElementById('scene');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05080f);
+  scene.fog = new THREE.FogExp2(0x05080f, 0.055);
+
+  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 80);
+
+  /* Camera state driven by GSAP; mouse parallax is layered on top.
+     Hero framing: camera offset left + lookAt pulled left so the
+     particle figure stands large in the right half, clear of the headline. */
+  const camState = { x: -2.4, y: 1.65, z: 5.2, lx: -1.35, ly: 1.15, lz: 0 };
+
+  /* Scroll-driven scene effects. `dissolve` scatters the particle body
+     into radio static while the camera passes through the wall, then
+     re-forms it on the other side — sensing lost, sensing reacquired. */
+  const fx = { dissolve: 0 };
+
+  /* ── Lights ────────────────────────────────────────────────── */
+  scene.add(new THREE.AmbientLight(0x16263f, 2.2));
+
+  const keyLight = new THREE.DirectionalLight(0x9bbcff, 0.55);
+  keyLight.position.set(4, 8, 6);
+  scene.add(keyLight);
+
+  // Cursor-following light — gives the scene a "scanning" feel
+  const cursorLight = new THREE.PointLight(0x38bdf8, 1.6, 9, 2);
+  cursorLight.position.set(0, 2, 3);
+  scene.add(cursorLight);
+
+  /* ── Room: floor grid + wireframe walls ────────────────────── */
+  const room = new THREE.Group();
+  scene.add(room);
+
+  const grid = new THREE.GridHelper(16, 32, 0x1d3252, 0x0e1a2e);
+  grid.position.y = 0;
+  room.add(grid);
+
+  function wallPanel(w, h) {
+    const group = new THREE.Group();
+    const geo = new THREE.PlaneGeometry(w, h, Math.round(w * 2), Math.round(h * 2));
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x0a1322, transparent: true, opacity: 0.42,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    group.add(new THREE.Mesh(geo, mat));
+    const wire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(geo),
+      new THREE.LineBasicMaterial({ color: 0x1d3a63, transparent: true, opacity: 0.35 })
+    );
+    group.add(wire);
+    return group;
+  }
+
+  // Back wall and one side wall — the side wall is the "through-wall" panel
+  const backWall = wallPanel(16, 5);
+  backWall.position.set(0, 2.5, -8);
+  room.add(backWall);
+
+  const sideWall = wallPanel(16, 5);
+  sideWall.rotation.y = Math.PI / 2;
+  sideWall.position.set(-5.2, 2.5, 0);
+  room.add(sideWall);
+
+  /* ── Skeleton (COCO-17, procedural walking) ─────────────────── */
+  const BONES = [
+    [0,1],[0,2],[1,3],[2,4],
+    [5,6],[5,7],[7,9],[6,8],[8,10],
+    [5,11],[6,12],[11,12],
+    [11,13],[13,15],[12,14],[14,16],
+  ];
+
+  const skeletonGroup = new THREE.Group();
+  scene.add(skeletonGroup);
+
+  // Faint structural joints + bones — the volumetric particle body below
+  // is the visual hero; these just hint at the skeletal reconstruction.
+  const jointMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 0.9, roughness: 0.25,
+    transparent: true, opacity: 0.85,
+  });
+  const joints = [];
+  for (let i = 0; i < 17; i++) {
+    const r = i === 0 ? 0.05 : (i <= 4 ? 0.028 : 0.042);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 12), jointMat);
+    skeletonGroup.add(m);
+    joints.push(m);
+  }
+
+  const boneGeo = new THREE.BufferGeometry();
+  boneGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BONES.length * 2 * 3), 3));
+  const boneLines = new THREE.LineSegments(
+    boneGeo,
+    new THREE.LineBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.3 })
+  );
+  skeletonGroup.add(boneLines);
+
+  /* ── Volumetric particle body ───────────────────────────────────
+     A human silhouette rebuilt from ~1.7k drifting signal points —
+     what a WiFi-CSI reconstruction "feels" like. Each particle lives
+     on a capsule around a bone segment (torso thick, limbs thin,
+     head spherical) and shimmers; a scan pulse sweeps up the body
+     and flares the points it passes. */
+
+  // Virtual joints 17/18/19 = mid-shoulder, mid-hip, head centre
+  const JExt = Array.from({ length: 20 }, () => new THREE.Vector3());
+
+  const BODY_SEGS = [
+    { a: 17, b: 18, r0: 0.175, r1: 0.14,  w: 26 },  // torso core
+    { a: 5,  b: 6,  r0: 0.075, r1: 0.075, w: 6  },  // shoulder bar
+    { a: 11, b: 12, r0: 0.075, r1: 0.075, w: 5  },  // hip bar
+    { a: 19, b: 17, r0: 0.075, r1: 0.095, w: 4  },  // neck
+    { a: 19, b: 19, r0: 0.16,  r1: 0.16,  w: 13 },  // head (sphere)
+    { a: 5,  b: 7,  r0: 0.055, r1: 0.045, w: 5  },  // upper arms
+    { a: 6,  b: 8,  r0: 0.055, r1: 0.045, w: 5  },
+    { a: 7,  b: 9,  r0: 0.045, r1: 0.034, w: 4  },  // forearms
+    { a: 8,  b: 10, r0: 0.045, r1: 0.034, w: 4  },
+    { a: 11, b: 13, r0: 0.085, r1: 0.06,  w: 7  },  // thighs
+    { a: 12, b: 14, r0: 0.085, r1: 0.06,  w: 7  },
+    { a: 13, b: 15, r0: 0.06,  r1: 0.05,  w: 6  },  // shins
+    { a: 14, b: 16, r0: 0.06,  r1: 0.05,  w: 6  },
+  ];
+
+  const BODY_N = prefersReduced ? 700 : (isMobile ? 950 : 1700);
+
+  // Weighted segment lookup table
+  const segPick = [];
+  BODY_SEGS.forEach((s, idx) => { for (let k = 0; k < s.w; k++) segPick.push(idx); });
+
+  const bSeg  = new Uint8Array(BODY_N);
+  const bU    = new Float32Array(BODY_N);
+  const bDir  = new Float32Array(BODY_N * 3);
+  const bMag  = new Float32Array(BODY_N);
+  const bSeed = new Float32Array(BODY_N);
+  const bScat = new Float32Array(BODY_N);   // per-particle dissolve scatter distance
+  const bTint = new Float32Array(BODY_N);   // subtle per-particle hue variance
+  for (let i = 0; i < BODY_N; i++) {
+    const segIdx = segPick[(Math.random() * segPick.length) | 0];
+    bSeg[i] = segIdx;
+    bU[i]   = Math.random();
+    // random unit direction
+    const th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 2 - 1);
+    bDir[i * 3]     = Math.sin(ph) * Math.cos(th);
+    bDir[i * 3 + 1] = Math.cos(ph);
+    bDir[i * 3 + 2] = Math.sin(ph) * Math.sin(th);
+    // sphere segments fill volume (cbrt), capsules hug the surface shell
+    const isSphere = BODY_SEGS[segIdx].a === BODY_SEGS[segIdx].b;
+    bMag[i]  = isSphere ? Math.cbrt(Math.random()) : (0.55 + Math.sqrt(Math.random()) * 0.45);
+    bSeed[i] = Math.random() * Math.PI * 2;
+    bScat[i] = 0.7 + Math.random() * 1.3;
+    bTint[i] = 0.85 + Math.random() * 0.3;
+  }
+
+  const bodyGeo = new THREE.BufferGeometry();
+  bodyGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BODY_N * 3), 3));
+  bodyGeo.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(BODY_N * 3), 3));
+  const bodyPoints = new THREE.Points(bodyGeo, new THREE.PointsMaterial({
+    size: 0.042, vertexColors: true,
+    map: makeGlowTexture('rgba(255,255,255,0.95)', 'rgba(255,255,255,0)'),
+    transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  }));
+  skeletonGroup.add(bodyPoints);
+
+  function updateBody(t) {
+    // virtual joints from the current pose
+    JExt[17].copy(J[5]).add(J[6]).multiplyScalar(0.5);                   // mid-shoulder
+    JExt[18].copy(J[11]).add(J[12]).multiplyScalar(0.5);                 // mid-hip
+    JExt[19].copy(J[1]).add(J[2]).add(J[3]).add(J[4]).multiplyScalar(0.25); // head centre
+    JExt[19].y += 0.02;
+    for (let i = 0; i < 17; i++) JExt[i].copy(J[i]);
+
+    const pos = bodyGeo.attributes.position.array;
+    const col = bodyGeo.attributes.color.array;
+
+    // scan pulse sweeps the body bottom→top on a loop
+    const scanY = ((t * 0.32) % 1.18) * 2.05 - 0.1;
+    const dis = fx.dissolve;
+
+    for (let i = 0; i < BODY_N; i++) {
+      const seg = BODY_SEGS[bSeg[i]];
+      const A = JExt[seg.a], B = JExt[seg.b];
+      const u = bU[i];
+      const r = (seg.r0 + (seg.r1 - seg.r0) * u)
+              * bMag[i] * (1 + 0.16 * Math.sin(t * 2.4 + bSeed[i]));
+      const i3 = i * 3;
+      let x = A.x + (B.x - A.x) * u + bDir[i3]     * r;
+      let y = A.y + (B.y - A.y) * u + bDir[i3 + 1] * r;
+      let z = A.z + (B.z - A.z) * u + bDir[i3 + 2] * r;
+
+      // dissolve: scatter outward into drifting radio static
+      if (dis > 0.001) {
+        const sc = dis * dis * bScat[i] * 1.7;
+        x += bDir[i3] * sc + Math.sin(t * 3.1 + bSeed[i] * 7) * dis * 0.25;
+        y += bDir[i3 + 1] * sc * 0.6 + dis * 0.25;
+        z += bDir[i3 + 2] * sc + Math.cos(t * 2.7 + bSeed[i] * 5) * dis * 0.25;
+      }
+      pos[i3] = x; pos[i3 + 1] = y; pos[i3 + 2] = z;
+
+      // brightness: gentle per-particle flicker + scan flare
+      const d = y - scanY;
+      const flare = Math.exp(-d * d * 90);
+      const base  = 0.5 + 0.28 * Math.sin(t * 2.1 + bSeed[i] * 3.7);
+      let k = Math.min(base + flare * 1.7, 2.2);
+      if (dis > 0.001) {
+        // fade the coherent body, add white-noise sparkle while scattered
+        k *= 1 - dis * 0.55;
+        k += dis * Math.max(0, Math.sin(bSeed[i] * 37 + t * 26)) * 0.85;
+      }
+      const tint = bTint[i];
+      col[i3]     = 0.24 * k * (2 - tint); // r — cooler when tint high
+      col[i3 + 1] = 0.72 * k * tint;       // g
+      col[i3 + 2] = 1.0  * k;              // b
+    }
+    bodyGeo.attributes.position.needsUpdate = true;
+    bodyGeo.attributes.color.needsUpdate = true;
+  }
+
+  /* ── Ghost echoes ──────────────────────────────────────────────
+     Two sparser particle bodies sampling the pose a fraction of a
+     second in the past — motion trails, like signal afterimages. */
+  function makeGhost(count, tintHex, opacity, delay, offsetX) {
+    const seg = new Uint8Array(count), uu = new Float32Array(count);
+    const dir = new Float32Array(count * 3), mag = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      const sIdx = segPick[(Math.random() * segPick.length) | 0];
+      seg[i] = sIdx; uu[i] = Math.random();
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(Math.random() * 2 - 1);
+      dir[i * 3] = Math.sin(ph) * Math.cos(th);
+      dir[i * 3 + 1] = Math.cos(ph);
+      dir[i * 3 + 2] = Math.sin(ph) * Math.sin(th);
+      const isSphere = BODY_SEGS[sIdx].a === BODY_SEGS[sIdx].b;
+      mag[i] = isSphere ? Math.cbrt(Math.random()) : (0.55 + Math.sqrt(Math.random()) * 0.45);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    const mat = new THREE.PointsMaterial({
+      size: 0.034, color: tintHex,
+      map: makeGlowTexture('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)'),
+      transparent: true, opacity, depthWrite: false,
+      blending: THREE.AdditiveBlending, sizeAttenuation: true,
+    });
+    const points = new THREE.Points(geo, mat);
+    skeletonGroup.add(points);
+
+    const gJ = Array.from({ length: 20 }, () => new THREE.Vector3());
+    return {
+      update(t) {
+        poseInto(t - delay, gJ);
+        gJ[17].copy(gJ[5]).add(gJ[6]).multiplyScalar(0.5);
+        gJ[18].copy(gJ[11]).add(gJ[12]).multiplyScalar(0.5);
+        gJ[19].copy(gJ[1]).add(gJ[2]).add(gJ[3]).add(gJ[4]).multiplyScalar(0.25);
+        gJ[19].y += 0.02;
+        const pos = geo.attributes.position.array;
+        for (let i = 0; i < count; i++) {
+          const s = BODY_SEGS[seg[i]];
+          const A = gJ[s.a], B = gJ[s.b];
+          const u = uu[i];
+          const r = (s.r0 + (s.r1 - s.r0) * u) * mag[i];
+          const i3 = i * 3;
+          pos[i3]     = A.x + (B.x - A.x) * u + dir[i3] * r + offsetX;
+          pos[i3 + 1] = A.y + (B.y - A.y) * u + dir[i3 + 1] * r;
+          pos[i3 + 2] = A.z + (B.z - A.z) * u + dir[i3 + 2] * r;
+        }
+        geo.attributes.position.needsUpdate = true;
+        mat.opacity = opacity * (1 - fx.dissolve * 0.9);
+      },
+    };
+  }
+  const GHOST_N = prefersReduced ? 0 : (isMobile ? 260 : 460);
+  const ghosts = GHOST_N
+    ? [makeGhost(GHOST_N, 0x818cf8, 0.30, 0.16, -0.10),
+       makeGhost(Math.round(GHOST_N * 0.7), 0x5eead4, 0.16, 0.32, -0.20)]
+    : [];
+
+  /* ── Heart core — a beating pulse in the chest ─────────────────
+     Sells the contactless-vitals story without a single word. */
+  const heartCore = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: makeGlowTexture('rgba(255,255,255,0.95)', 'rgba(52,211,153,0)'),
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  skeletonGroup.add(heartCore);
+
+  function updateHeart(t) {
+    // double-thump envelope at ~66 bpm
+    const bt = (t * 1.1) % 1;
+    const env = Math.exp(-((bt - 0.12) ** 2) / 0.004)
+              + 0.55 * Math.exp(-((bt - 0.34) ** 2) / 0.007);
+    heartCore.position.set(
+      (J[5].x + J[6].x) / 2 + 0.02,
+      (J[5].y + J[6].y) / 2 - 0.16,
+      0.08
+    );
+    heartCore.scale.setScalar(0.30 + env * 0.26);
+    heartCore.material.opacity = (0.45 + env * 0.55) * (1 - fx.dissolve);
+  }
+
+  // Soft glow halo around the chest (sprite with radial gradient)
+  function makeGlowTexture(inner, outer) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(64, 64, 6, 64, 64, 64);
+    g.addColorStop(0, inner);
+    g.addColorStop(1, outer);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  }
+  const chestGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: makeGlowTexture('rgba(56,189,248,0.55)', 'rgba(56,189,248,0)'),
+    transparent: true, depthWrite: false,
+  }));
+  chestGlow.scale.setScalar(2.6);
+  skeletonGroup.add(chestGlow);
+
+  /* Walking pose generator — world-space joint positions.
+     Pure function of time writing into a caller-owned array, so the
+     ghost echoes can sample the pose at (t - delay). */
+  const J = Array.from({ length: 17 }, () => new THREE.Vector3());
+  function poseAt(t) { return poseInto(t, J); }
+  function poseInto(t, J) {
+    const s = Math.sin, walk = t * 2.1;
+    const sway = s(walk) * 0.05;
+    const bob  = Math.abs(s(walk)) * 0.05;
+    const hipY = 0.98 + bob, shY = 1.52 + bob, headY = 1.78 + bob;
+
+    J[0].set(sway, headY + 0.06, 0.02);                       // nose
+    J[1].set(sway - 0.045, headY + 0.09, 0.05);               // eyes
+    J[2].set(sway + 0.045, headY + 0.09, 0.05);
+    J[3].set(sway - 0.09, headY + 0.05, 0);                   // ears
+    J[4].set(sway + 0.09, headY + 0.05, 0);
+
+    const armL = s(walk) * 0.34, armR = -s(walk) * 0.34;
+    J[5].set(-0.24 + sway, shY, 0);                           // shoulders
+    J[6].set( 0.24 + sway, shY, 0);
+    J[7].set(-0.3 + sway, shY - 0.3, armL * 0.5);             // elbows
+    J[8].set( 0.3 + sway, shY - 0.3, armR * 0.5);
+    J[9].set(-0.32 + sway, shY - 0.62, armL);                 // wrists
+    J[10].set(0.32 + sway, shY - 0.62, armR);
+
+    const legL = s(walk + Math.PI) * 0.3, legR = s(walk) * 0.3;
+    J[11].set(-0.13 + sway, hipY, 0);                         // hips
+    J[12].set( 0.13 + sway, hipY, 0);
+    J[13].set(-0.14 + sway, hipY - 0.46, legL * 0.6);         // knees
+    J[14].set( 0.14 + sway, hipY - 0.46, legR * 0.6);
+    J[15].set(-0.15 + sway, 0.06 + Math.max(0, s(walk + Math.PI)) * 0.07, legL); // ankles
+    J[16].set( 0.15 + sway, 0.06 + Math.max(0, s(walk)) * 0.07, legR);
+    return J;
+  }
+
+  function updateSkeleton(t) {
+    const pose = poseAt(t);
+    for (let i = 0; i < 17; i++) joints[i].position.copy(pose[i]);
+    const pos = boneGeo.attributes.position;
+    BONES.forEach(([a, b], i) => {
+      pos.setXYZ(i * 2,     pose[a].x, pose[a].y, pose[a].z);
+      pos.setXYZ(i * 2 + 1, pose[b].x, pose[b].y, pose[b].z);
+    });
+    pos.needsUpdate = true;
+    chestGlow.position.set(pose[5].x + 0.24, pose[5].y - 0.18, 0);
+    const breathe = 1 + Math.sin(t * 1.4) * 0.08;
+    chestGlow.scale.setScalar(2.6 * breathe);
+  }
+
+  /* ── Sensor nodes + expanding CSI rings ─────────────────────── */
+  const NODE_POS = [
+    new THREE.Vector3(-4.6, 1.1, -4.4),
+    new THREE.Vector3( 4.6, 1.4, -3.4),
+    new THREE.Vector3( 3.6, 0.9,  4.4),
+  ];
+
+  const nodeMat = new THREE.MeshStandardMaterial({
+    color: 0x223349, emissive: 0x38bdf8, emissiveIntensity: 0.7, roughness: 0.4,
+  });
+  const nodeMeshes = NODE_POS.map(p => {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.34), nodeMat);
+    g.add(body);
+    const tip = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, 0.3, 6),
+      new THREE.MeshBasicMaterial({ color: 0x9bd9ff })
+    );
+    tip.position.y = 0.22;
+    g.add(tip);
+    const lamp = new THREE.PointLight(0x38bdf8, 0.5, 4, 2);
+    g.add(lamp);
+    g.position.copy(p);
+    scene.add(g);
+    return g;
+  });
+
+  // Pool of expanding rings (each node continuously "pings" the room)
+  const RING_COUNT = isMobile ? 6 : 9;
+  const rings = [];
+  const ringGeo = new THREE.RingGeometry(0.96, 1, 64);
+  for (let i = 0; i < RING_COUNT; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8, transparent: true, opacity: 0,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(ringGeo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    scene.add(mesh);
+    rings.push({
+      mesh, mat,
+      node: i % NODE_POS.length,
+      phase: i / RING_COUNT,          // staggered start
+    });
+  }
+  const RING_PERIOD = 2.6, RING_MAX = 6.5;
+  function updateRings(t) {
+    rings.forEach(r => {
+      const local = ((t / RING_PERIOD) + r.phase) % 1;
+      const radius = 0.2 + local * RING_MAX;
+      const origin = NODE_POS[r.node];
+      r.mesh.position.set(origin.x, 0.04, origin.z);
+      r.mesh.scale.setScalar(radius);
+      r.mat.opacity = (1 - local) * 0.34;
+    });
+  }
+
+  /* ── Signal particles (drifting RF "dust") ──────────────────── */
+  const P_COUNT = prefersReduced ? 220 : (isMobile ? 420 : 950);
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(P_COUNT * 3);
+  const pSeed = new Float32Array(P_COUNT);
+  for (let i = 0; i < P_COUNT; i++) {
+    pPos[i * 3]     = (Math.random() - 0.5) * 17;
+    pPos[i * 3 + 1] = Math.random() * 5.2;
+    pPos[i * 3 + 2] = (Math.random() - 0.5) * 17;
+    pSeed[i] = Math.random() * Math.PI * 2;
+  }
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({
+    size: 0.055, map: makeGlowTexture('rgba(150,215,255,0.9)', 'rgba(150,215,255,0)'),
+    transparent: true, depthWrite: false, opacity: 0.75,
+    blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  }));
+  scene.add(particles);
+
+  function updateParticles(t) {
+    const arr = pGeo.attributes.position.array;
+    for (let i = 0; i < P_COUNT; i++) {
+      arr[i * 3 + 1] += Math.sin(t * 0.7 + pSeed[i]) * 0.0016 + 0.0026;
+      if (arr[i * 3 + 1] > 5.4) arr[i * 3 + 1] = 0;
+    }
+    pGeo.attributes.position.needsUpdate = true;
+  }
+
+  /* ── Vitals trace (glowing ECG line behind the scene) ───────── */
+  const ECG_N = 220;
+  const ecgGeo = new THREE.BufferGeometry();
+  ecgGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ECG_N * 3), 3));
+  const ecg = new THREE.Line(ecgGeo, new THREE.LineBasicMaterial({
+    color: 0x34d399, transparent: true, opacity: 0.55,
+  }));
+  scene.add(ecg);
+  function ecgSample(x, t) {
+    const beat = ((x * 0.55 + t * 0.8) % 1 + 1) % 1;
+    let y = Math.sin(beat * Math.PI * 2) * 0.03;
+    if (beat > 0.42 && beat < 0.5) y += Math.sin((beat - 0.42) / 0.08 * Math.PI) * 0.42;
+    return y;
+  }
+  function updateEcg(t) {
+    const arr = ecgGeo.attributes.position.array;
+    for (let i = 0; i < ECG_N; i++) {
+      const x = (i / (ECG_N - 1)) * 12 - 6;
+      arr[i * 3] = x;
+      arr[i * 3 + 1] = 2.6 + ecgSample(x, t);
+      arr[i * 3 + 2] = -7.6;
+    }
+    ecgGeo.attributes.position.needsUpdate = true;
+  }
+
+  /* ── Mouse parallax + cursor light tracking ─────────────────── */
+  const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
+  window.addEventListener('pointermove', (e) => {
+    mouse.tx = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.ty = (e.clientY / window.innerHeight) * 2 - 1;
+  }, { passive: true });
+
+  /* ── Render loop ────────────────────────────────────────────── */
+  const lookTarget = new THREE.Vector3();
+  const clock = new THREE.Clock();
+  let firstFrameDone = false;
+
+  function render() {
+    applySize();   // self-heal canvas size (hidden-tab loads report 0×0)
+    const t = clock.getElapsedTime();
+
+    updateSkeleton(t);
+    updateBody(t);
+    ghosts.forEach(g => g.update(t));
+    updateHeart(t);
+    updateRings(t);
+    updateParticles(t);
+    updateEcg(t);
+
+    nodeMeshes.forEach((n, i) => {
+      n.children[0].material.emissiveIntensity = 0.55 + Math.sin(t * 3 + i * 2.1) * 0.35;
+    });
+
+    // smooth mouse
+    mouse.x += (mouse.tx - mouse.x) * 0.06;
+    mouse.y += (mouse.ty - mouse.y) * 0.06;
+
+    const par = prefersReduced ? 0 : 1;
+    camera.position.set(
+      camState.x + mouse.x * 0.5 * par,
+      camState.y + -mouse.y * 0.3 * par,
+      camState.z
+    );
+    lookTarget.set(camState.lx, camState.ly, camState.lz);
+    camera.lookAt(lookTarget);
+
+    // cursor light hovers between camera and skeleton
+    cursorLight.position.set(
+      camState.lx + mouse.x * 3.2,
+      1.8 + -mouse.y * 1.6,
+      camState.lz + (camState.z - camState.lz) * 0.35
+    );
+
+    renderer.render(scene, camera);
+    if (!firstFrameDone) { firstFrameDone = true; hideLoader(); }
+    requestAnimationFrame(render);
+  }
+
+  /* ── Resize ─────────────────────────────────────────────────────
+     Also self-heals if the page loaded in a hidden/zero-sized tab
+     (background tab, prerender): the render loop re-checks dimensions
+     every frame and re-applies them the moment they become valid. */
+  let lastW = 0, lastH = 0;
+  function applySize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    if (!w || !h || (w === lastW && h === lastH)) return;
+    lastW = w; lastH = h;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  window.addEventListener('resize', applySize);
+  document.addEventListener('visibilitychange', applySize);
+  applySize();
+
+  /* ── Lenis smooth scroll + GSAP ScrollTrigger ───────────────── */
+  gsap.registerPlugin(ScrollTrigger);
+
+  const lenis = new Lenis({ smoothWheel: !prefersReduced, duration: 1.15 });
+  lenis.on('scroll', ScrollTrigger.update);
+  gsap.ticker.add((time) => lenis.raf(time * 1000));
+  gsap.ticker.lagSmoothing(0);
+
+  // Anchor links scroll through Lenis
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (!target) return;
+      e.preventDefault();
+      lenis.scrollTo(target, { offset: 0, duration: 1.4 });
+    });
+  });
+
+  /* Camera tour — one scrubbed timeline across the entire page.
+     Each leg moves the camera into a new "room" of the scene. */
+  const LEGS = [
+    // hero → technology: swing right, closer to the node mesh
+    { x: 5.6, y: 2.4, z: 4.6,  lx: 0,    ly: 1.2, lz: 0 },
+    // technology → privacy: glide through/behind the side wall
+    { x: -8.4, y: 1.6, z: 1.6, lx: 0,    ly: 1.1, lz: 0 },
+    // privacy → care: rise to a guardian's overhead view
+    { x: -1.2, y: 6.8, z: 3.4, lx: 0,    ly: 0.6, lz: 0 },
+    // care → platform: sweep down behind the scene, facing the ECG wall
+    { x: 4.8, y: 1.5, z: -5.6, lx: -0.5, ly: 1.6, lz: -7.6 },
+    // platform → contact: pull back to a wide cinematic master shot
+    { x: 0,   y: 2.6, z: 10.4, lx: 0,    ly: 1.2, lz: 0 },
+  ];
+
+  const tour = gsap.timeline({
+    defaults: { ease: 'none' },
+    scrollTrigger: {
+      trigger: '#scroll-container',
+      start: 'top top',
+      end: 'bottom bottom',
+      scrub: prefersReduced ? false : 0.9,
+    },
+  });
+  LEGS.forEach(leg => tour.to(camState, { ...leg, duration: 1 }));
+
+  /* Dissolve/re-form synced to the through-wall leg (timeline 1.0→2.0):
+     the body scatters into static as the camera crosses the wall, then
+     snaps back together on the far side — sensing lost, reacquired. */
+  tour.to(fx, { dissolve: 1, duration: 0.42, ease: 'power2.in'  }, 1.06);
+  tour.to(fx, { dissolve: 0, duration: 0.46, ease: 'power3.out' }, 1.52);
+
+  /* Per-section copy reveal */
+  document.querySelectorAll('[data-reveal]').forEach(el => {
+    gsap.fromTo(el,
+      { opacity: 0, y: 56 },
+      {
+        opacity: 1, y: 0, duration: 1.05, ease: 'power3.out',
+        scrollTrigger: { trigger: el, start: 'top 78%', toggleActions: 'play none none reverse' },
+      }
+    );
+  });
+
+  /* ── Loader ─────────────────────────────────────────────────── */
+  const loader = document.getElementById('loader');
+  const fill   = document.getElementById('loader-fill');
+  const label  = document.getElementById('loader-label');
+  const labels = ['calibrating radio field', 'meshing sensor nodes', 'reconstructing pose'];
+  let li = 0;
+  const labelTimer = setInterval(() => { label.textContent = labels[++li % labels.length]; }, 700);
+  gsap.to(fill, { width: '82%', duration: 1.4, ease: 'power2.out' });
+
+  function hideLoader() {
+    clearInterval(labelTimer);
+    gsap.to(fill, { width: '100%', duration: 0.3, ease: 'power1.in' });
+    gsap.to(loader, {
+      opacity: 0, duration: 0.7, delay: 0.45, ease: 'power2.inOut',
+      onComplete: () => { loader.style.display = 'none'; },
+    });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

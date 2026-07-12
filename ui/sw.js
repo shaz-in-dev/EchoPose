@@ -3,7 +3,7 @@
    Caches static UI assets for offline/flaky-network resilience.
    ================================================================ */
 
-const CACHE   = 'echopose-v2';
+const CACHE   = 'echopose-v3';
 const OFFLINE = [
   './mobile.html',
   './tablet.html',
@@ -12,6 +12,10 @@ const OFFLINE = [
   './app.js',
   './skeleton.js',
   './heatmap.js',
+  './recorder.js',
+  './wasm_bridge.js',
+  './vendor/three.min.js',
+  './vendor/OrbitControls.js',
   './manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap'
 ];

@@ -38,7 +38,8 @@ window.EchoPoseWasm = (function () {
       console.log('[wasm_bridge] EchoPose WASM loaded');
       return true;
     } catch (e) {
-      console.error('[EchoPose WASM] Failed to load:', e);
+      // WASM is an optional accelerator — JS fallbacks cover all functions.
+      console.info('[EchoPose WASM] Not available (JS fallback active). Build with scripts/build_wasm.ps1 to enable.');
       _wasm = null;
       _ready = false;
       // Reject any pending .ready waiters

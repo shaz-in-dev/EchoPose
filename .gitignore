@@ -20,6 +20,13 @@ venv/
 env/
 ENV/
 
+# Local tool state — not shared project config
+.claude/
+
+# Runtime-generated data (session DBs, captured CSI, etc.) — not source
+inference/data/
+data/
+
 # Python packaging artefacts — local builds should never be committed
 dist/
 build/
@@ -47,3 +54,11 @@ package-lock.json
 docs/business/
 docs/financial/
 docs/legal/
+
+# Trained model checkpoints — real weights are large, hardware/session-specific,
+# and must never be shipped by accident. Smoke-test/synthetic checkpoints
+# (pose_net.synthetic_smoketest.pt) are intentionally excluded too so nothing
+# under models/ is committed silently again.
+inference/models/*.pt
+inference/models/*.onnx
+inference/models/validation_results*.json

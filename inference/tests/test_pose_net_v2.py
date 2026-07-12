@@ -29,11 +29,17 @@ def test_batch_forward(model):
     assert out.shape == (4, MAX_PEOPLE, NUM_KEYPOINTS, 4)
 
 
-def test_output_range_sigmoid(model):
+def test_output_range(model):
+    from pipeline.pose_net_v2 import ROOM_COORD_RANGE_M
     x = _random_input()
     out = model(x)
-    assert out.min() >= 0.0
-    assert out.max() <= 1.0
+    xyz, conf = out[..., :3], out[..., 3]
+    # x/y/z are world-space metres, bounded by tanh * ROOM_COORD_RANGE_M
+    assert xyz.min() >= -ROOM_COORD_RANGE_M
+    assert xyz.max() <= ROOM_COORD_RANGE_M
+    # confidence is an independent [0,1] probability
+    assert conf.min() >= 0.0
+    assert conf.max() <= 1.0
 
 
 def test_encoder_output_shape(model):

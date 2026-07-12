@@ -401,6 +401,85 @@ body {
   background: linear-gradient(135deg, rgba(56,189,248,.25), rgba(129,140,248,.25));
 }
 
+/* ── Critical alert banner ───────────────────────────── */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: linear-gradient(90deg, rgba(248,113,113,.25), rgba(248,113,113,.15));
+  border-bottom: 2px solid var(--danger);
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: .03em;
+  flex-shrink: 0;
+  animation: flash-alert .8s infinite alternate;
+}
+.alert-banner.hidden { display: none; }
+.alert-banner .ctrl-btn { animation: none; color: var(--text); }
+
+/* ── Stale-data overlay ──────────────────────────────── */
+.stale-overlay {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(251,191,36,.15);
+  border: 1px solid rgba(251,191,36,.4);
+  color: #fbbf24;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 50;
+  pointer-events: none;
+}
+.stale-overlay.hidden { display: none; }
+
+/* ── "estimates" disclaimer tag on vitals ────────────── */
+.acard-tag {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: .04em;
+  color: #fbbf24;
+  border: 1px solid rgba(251,191,36,.4);
+  border-radius: 999px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  cursor: help;
+}
+
+/* ── Accessibility ───────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Responsive: stack panels under 1100px ───────────── */
+@media (max-width: 1100px) {
+  html, body { overflow: auto; }
+  .layout {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+  .panel--primary { min-height: 45vh; }
+  .side-panels { flex-direction: column; overflow: visible; }
+  .analytics-strip { max-height: none; }
+  .analytics-cards { flex-wrap: wrap; overflow-x: visible; }
+  .header-sub { display: none; }
+}
+
 /* Smart Home tabs */
 .sh-tab {
   background: var(--surface2);

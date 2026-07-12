@@ -13,18 +13,41 @@ class CsiHeatmap {
     this.select   = document.getElementById(nodeSelectId);
     this.numSub   = numSub;
     this.steps    = timeSteps;
-    this.nodeId   = 0;
+    this.nodeId   = null;            // resolved from incoming data
+    this.knownNodes = new Set();
     // Circular buffer [timeSteps][numSub]
     this.history  = Array.from({ length: timeSteps }, () => new Float32Array(numSub));
     this.head     = 0;
 
-    this.select.addEventListener('change', () => { this.nodeId = +this.select.value; });
+    this.select.addEventListener('change', () => { this.nodeId = this.select.value; });
+  }
+
+  /** Rebuild the node <select> from the node IDs actually present in the
+      data stream. Real ESP32 node IDs are arbitrary strings (MAC-derived),
+      not the 0/1/2 placeholders the static HTML ships with. */
+  _syncNodeOptions(framesByNode) {
+    const ids = Object.keys(framesByNode);
+    let changed = false;
+    for (const id of ids) {
+      if (!this.knownNodes.has(id)) { this.knownNodes.add(id); changed = true; }
+    }
+    if (!changed) return;
+    const prev = this.nodeId;
+    this.select.innerHTML = '';
+    [...this.knownNodes].sort().forEach(id => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = `Node ${id}`;
+      this.select.appendChild(opt);
+    });
+    this.nodeId = (prev !== null && this.knownNodes.has(prev)) ? prev : ids[0];
+    this.select.value = this.nodeId;
   }
 
   push(framesByNode) {
-    // JSON keys are always strings; coerce nodeId to match
-    const frame = framesByNode[String(this.nodeId)] ?? framesByNode[this.nodeId];
-    if (!frame) return;
+    this._syncNodeOptions(framesByNode);
+    const frame = framesByNode[this.nodeId];
+    if (!frame || !frame.amplitudes) return;
     const row = this.history[this.head % this.steps];
     frame.amplitudes.slice(0, this.numSub).forEach((v, i) => row[i] = v);
     this.head++;

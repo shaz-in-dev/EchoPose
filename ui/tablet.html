@@ -9,9 +9,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <script src="skeleton.js" defer></script>
-  <script src="heatmap.js"  defer></script>
-  <script src="wasm_bridge.js" defer></script>
+  <!-- three.js must load before skeleton.js (SkeletonRenderer uses THREE).
+       Vendored locally — LAN deployments have no internet access. -->
+  <script src="vendor/three.min.js?v=0.3.0" defer></script>
+  <script src="vendor/OrbitControls.js?v=0.3.0" defer></script>
+  <script src="skeleton.js?v=0.3.0" defer></script>
+  <script src="heatmap.js?v=0.3.0"  defer></script>
+  <script src="wasm_bridge.js?v=0.3.0" defer></script>
 <style>
 /* ================================================================
    EchoPose — Tablet / Desktop Command Dashboard
@@ -1380,12 +1384,18 @@ let skeletonRenderer = null;
 let heatmapRenderer  = null;
 
 window.addEventListener('DOMContentLoaded', () => {
-  if (typeof SkeletonRenderer !== 'undefined') {
-    skeletonRenderer = new SkeletonRenderer('t-skeleton-canvas');
-  }
-  if (typeof CsiHeatmap !== 'undefined') {
-    heatmapRenderer = new CsiHeatmap('t-heatmap-canvas', 't-heatmap-node');
-  }
+  // Init each renderer independently — a WebGL failure on one must not
+  // prevent the other from starting.
+  try {
+    if (typeof SkeletonRenderer !== 'undefined' && typeof THREE !== 'undefined') {
+      skeletonRenderer = new SkeletonRenderer('t-skeleton-canvas');
+    }
+  } catch (e) { console.warn('3D renderer unavailable:', e); }
+  try {
+    if (typeof CsiHeatmap !== 'undefined') {
+      heatmapRenderer = new CsiHeatmap('t-heatmap-canvas', 't-heatmap-node');
+    }
+  } catch (e) { console.warn('Heatmap unavailable:', e); }
 });
 
 document.getElementById('t-btn-rotate').addEventListener('click', () => {
@@ -1431,7 +1441,7 @@ function handleFrame(data) {
 
   const occ = data.analytics?.occupancy;
   if (occ) {
-    const n = occ.count ?? 0;
+    const n = occ.num_people ?? occ.count ?? 0;
     document.getElementById('t-people').innerHTML = `${n}<span class="stat-card-unit"> in room</span>`;
   }
 }
@@ -1441,7 +1451,7 @@ function applyAnalytics(a) {
   const hr   = v.heart_rate?.heart_rate;
   const rr   = v.respiratory_rate?.respiratory_rate;
   const spo2 = v.spo2?.spo2;
-  const temp = v.temperature?.temperature;
+  const temp = v.temperature?.temperature_c ?? v.temperature?.temperature;
   const bp   = v.blood_pressure;
 
   // Overview quick stats
@@ -1452,7 +1462,7 @@ function applyAnalytics(a) {
   // Vitals page
   set('t-hr',   fmt(hr));   set('t-rr', fmt(rr));
   set('t-spo2', fmt(spo2)); set('t-temp', fmt(temp, 1));
-  set('t-bp', bp ? `${fmt(bp.systolic)}/${fmt(bp.diastolic)}` : '--/--');
+  set('t-bp', bp && bp.systolic_mmhg != null ? `${fmt(bp.systolic_mmhg,0)}/${fmt(bp.diastolic_mmhg,0)}` : '--/--');
 
   // Sparklines
   if (hr   != null) pushSpark('t-hr-spark',   hr);
@@ -1473,17 +1483,21 @@ function applyAnalytics(a) {
   set('t-activity', actN);       set('t-activity-conf', `Confidence: ${actC}`);
   set('t-act-quick', actN);      set('t-act-conf-quick', actC);
 
-  // Gait
+  // Gait — server keys: walking_speed_ms / cadence_steps_min / stride_length_m / gait_symmetry
   const g = a.gait || {};
-  document.getElementById('t-gait-speed').innerHTML   = g.speed    != null ? `${fmt(g.speed,1)}<span class="act-stat-unit"> m/s</span>` : '--';
-  document.getElementById('t-gait-cadence').innerHTML = g.cadence  != null ? `${fmt(g.cadence,0)}<span class="act-stat-unit"> spm</span>` : '--';
-  document.getElementById('t-gait-stride').innerHTML  = g.stride_length != null ? `${fmt(g.stride_length,2)}<span class="act-stat-unit"> m</span>` : '--';
-  set('t-gait-sym', g.symmetry != null ? `${fmt(g.symmetry*100,0)}%` : '--%');
+  const gSpeed   = g.walking_speed_ms  ?? g.speed;
+  const gCadence = g.cadence_steps_min ?? g.cadence;
+  const gStride  = g.stride_length_m   ?? g.stride_length;
+  const gSym     = g.gait_symmetry     ?? g.symmetry;
+  document.getElementById('t-gait-speed').innerHTML   = gSpeed   != null ? `${fmt(gSpeed,1)}<span class="act-stat-unit"> m/s</span>` : '--';
+  document.getElementById('t-gait-cadence').innerHTML = gCadence != null ? `${fmt(gCadence,0)}<span class="act-stat-unit"> spm</span>` : '--';
+  document.getElementById('t-gait-stride').innerHTML  = gStride  != null ? `${fmt(gStride,2)}<span class="act-stat-unit"> m</span>` : '--';
+  set('t-gait-sym', gSym != null ? `${fmt(gSym*100,0)}%` : '--%');
 
   // Fall
   const fall = a.fall || {};
   const fell = fall.fall_detected;
-  const risk = (fall.risk_level ?? 'low').toLowerCase();
+  const risk = (fall.fall_risk ?? fall.risk_level ?? 'low').toLowerCase();
   const bal  = fall.balance_score != null ? `${fmt(fall.balance_score*100,0)}%` : '--';
   const fallS = fell ? 'FALL DETECTED' : risk === 'high' ? 'High Risk' : 'Safe';
   const fallC = fell ? 'fallen' : risk === 'high' ? 'risk' : 'safe';
@@ -1499,17 +1513,18 @@ function applyAnalytics(a) {
   set('t-gest-left',  gest.left_hand  ?? gest.left  ?? 'idle');
   set('t-gest-right', gest.right_hand ?? gest.right ?? 'idle');
 
-  // Sleep
+  // Sleep — server key: sleep_stage
   const sleep = a.sleep || {};
-  set('t-sleep-stage', (sleep.stage ?? '--').toUpperCase());
+  const sStage = sleep.sleep_stage ?? sleep.stage ?? '--';
+  set('t-sleep-stage', sStage.toUpperCase());
   set('t-sleep-conf', sleep.confidence != null ? `${fmt(sleep.confidence*100)}%` : '--');
-  set('t-sleep-quick', (sleep.stage ?? '--').toUpperCase());
+  set('t-sleep-quick', sStage.toUpperCase());
   set('t-sleep-conf-quick', sleep.confidence != null ? `${fmt(sleep.confidence*100)}%` : '--');
 
-  // Occupancy
+  // Occupancy — server key: num_people
   const occ = a.occupancy || {};
   set('t-occ-status', occ.occupied ? 'Occupied' : 'Empty');
-  set('t-occ-count', occ.count ?? 0);
+  set('t-occ-count', occ.num_people ?? occ.count ?? 0);
 
   // Stress
   const emo = a.emotion || {};
@@ -1553,7 +1568,7 @@ function applyTactical(t) {
   const threatEl = document.getElementById('t-threat-big');
   threatEl.textContent = tl;
   threatEl.className   = `threat-big ${tl.toLowerCase()}`;
-  set('t-threat-count', `${tgt.target_count ?? 0} targets in area`);
+  set('t-threat-count', `${tgt.targets_detected ?? tgt.target_count ?? 0} targets in area`);
   const quickEl = document.getElementById('t-threat-quick');
   quickEl.textContent = tl;
   quickEl.className   = `stat-card-value ${tl === 'RED' ? 'c-red' : tl === 'YELLOW' ? 'c-yellow' : 'c-green'}`;
@@ -1593,7 +1608,7 @@ function applyTactical(t) {
   // Intent
   const intent = t.intent || {};
   const il    = (intent.intent ?? 'NORMAL').toUpperCase();
-  const prob  = (intent.attack_probability ?? 0) * 100;
+  const prob  = ((intent.scores && intent.scores.attack) ?? intent.attack_probability ?? 0) * 100;
   const intentEl = document.getElementById('t-intent');
   intentEl.textContent = il;
   intentEl.className   = `intent-val ${il === 'ATTACK_IMMINENT' ? 'c-red' : il !== 'NORMAL' ? 'c-yellow' : 'c-green'}`;

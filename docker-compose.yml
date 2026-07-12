@@ -25,10 +25,14 @@ services:
     working_dir: /app
     volumes:
       - ./.env:/app/.env
+      - inference-data:/app/data       # persistent session DB and model cache
     command: >
       gunicorn server:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}
     expose:
       - "${INFERENCE_WS_PORT:-8765}"    # internal only; exposed via inference_gateway
+    environment:
+      MATTER_HOST: matter-bridge        # reach the matter-bridge service by name
+      TRUSTED_PROXIES: "172.16.0.0/12" # trust Docker bridge network for X-Forwarded-For
     env_file:
       - .env
     depends_on:
@@ -49,10 +53,14 @@ services:
     working_dir: /app
     volumes:
       - ./.env:/app/.env
+      - inference-data:/app/data
     command: >
       gunicorn server_v2:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${INFERENCE_WS_PORT:-8765}
     expose:
       - "${INFERENCE_WS_PORT:-8765}"
+    environment:
+      MATTER_HOST: matter-bridge
+      TRUSTED_PROXIES: "172.16.0.0/12"
     env_file:
       - .env
     depends_on:
@@ -85,8 +93,8 @@ services:
       dockerfile: Dockerfile
     image: echopose_matter_bridge:latest
     ports:
-      - "${MATTER_HTTP_PORT:-7788}:7788"          # HTTP control API (localhost only in prod)
-      - "${MATTER_PORT:-5540}:5540/udp"            # Matter protocol (UDP)
+      - "127.0.0.1:${MATTER_HTTP_PORT:-7788}:7788" # HTTP control API — localhost only
+      - "${MATTER_PORT:-5540}:5540/udp"             # Matter protocol (UDP — must be reachable on LAN)
     volumes:
       - matter-storage:/app/matter-storage         # persist commissioning data across restarts
     environment:
@@ -105,4 +113,6 @@ services:
 
 volumes:
   matter-storage:
+    driver: local
+  inference-data:
     driver: local

@@ -60,6 +60,11 @@ class SkeletonRenderer {
     grid.position.y = -2;
     this.scene.add(grid);
 
+    // Track bone and joint objects for disposal.
+    // MUST be initialised before the pool loop below pushes into them.
+    this._boneObjects = [];
+    this._jointObjects = [];
+
     // Initialise skeleton pool
     const colors = [0x38bdf8, 0x10b981, 0xf59e0b]; // Different colors for people
     const boneColors = [0x818cf8, 0x34d399, 0xfbbf24];
@@ -105,10 +110,6 @@ class SkeletonRenderer {
       this.scene.add(m);
       this.nodes.push(m);
     }
-
-    // Track bone and joint objects for disposal
-    this._boneObjects = [];
-    this._jointObjects = [];
 
     this._resize();
     this._resizeHandler = () => this._resize();

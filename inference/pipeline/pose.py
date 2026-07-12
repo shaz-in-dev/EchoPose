@@ -58,7 +58,13 @@ class PoseEstimator:
         self.onnx_sess = None
         self.optimized = None
         self.model = None
-        
+        self.sim_tick = 0
+        # Default to non-simulation; only the PyTorch fallback path below can
+        # set this True. Must be set before any early return (ONNX/optimized
+        # backends return before reaching that path) so `estimator.is_simulation`
+        # is always a valid attribute, never an AttributeError.
+        self.is_simulation = False
+
         # 0. Try OptimizedInference first (TensorRT / CoreML / INT8 Quantized)
         try:
             opt = OptimizedInference()
@@ -69,7 +75,7 @@ class PoseEstimator:
                 return
         except Exception as e:
             logger.debug("OptimizedInference unavailable: %s", e)
-        
+
         # 1. Try ONNX (standard providers)
         if ONNX_CKPT.exists() and has_ort:
             expected_hash = os.getenv("EXPECTED_ONNX_HASH")
@@ -124,6 +130,20 @@ class PoseEstimator:
             logger.info("No checkpoint found at %s — simulation mode.", MODEL_CKPT)
         self.is_simulation = not MODEL_CKPT.exists() and not self.use_onnx
         self.sim_tick = 0
+
+        # In production, simulation mode means the server would silently stream
+        # a scripted fake skeleton to real users with only a buried JSON flag as
+        # the tell. Require an explicit opt-in instead of letting that happen by
+        # accident (e.g. a missing/renamed checkpoint on a production deploy).
+        _is_production = os.getenv("ECHOPOSE_ENV", "development").lower() == "production"
+        _allow_sim = os.getenv("ALLOW_SIMULATION_MODE", "false").lower() == "true"
+        if self.is_simulation and _is_production and not _allow_sim:
+            raise RuntimeError(
+                f"No trained model checkpoint found at {MODEL_CKPT}, but ECHOPOSE_ENV=production. "
+                "Refusing to start in simulation mode — it would serve a scripted fake skeleton "
+                "to real users. Provide a real checkpoint, or set ALLOW_SIMULATION_MODE=true to "
+                "explicitly acknowledge you want simulated pose data in production."
+            )
 
     @torch.no_grad()
     def predict(self, features: np.ndarray, per_person_features: list = None) -> List[List[Dict]]:

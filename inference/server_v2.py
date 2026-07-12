@@ -17,7 +17,8 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 import websockets
 from websockets.exceptions import WebSocketException
 from pipeline.fusion import FusionPipeline
-from pipeline.pose import PoseEstimator as DistributedInference  # gpu_server removed; use shared estimator
+from pipeline.pose import PoseEstimator as DistributedInference
+from pipeline.fall_detector import FallDetector as _FallDetector
 from security import limiter, verify_api_key
 from integrations.homeassistant import HAConfig, HomeAssistantBridge
 from integrations.matter import MatterBridge
@@ -32,12 +33,19 @@ logger = logging.getLogger("rf_inference.async_server")
 AGGREGATOR_WS = os.getenv("AGGREGATOR_WS_URI", "ws://localhost:3000/ws")
 
 class HighThroughputServer:
-    """Manages concurrent UI clients and non-blocking inference decoupling"""
+    """Manages concurrent UI clients and non-blocking inference decoupling.
+
+    NOTE: This server prioritises throughput over analytics richness.
+    Vitals extraction, activity classification, emotion, and tactical modules
+    are NOT run here — use server.py for those features.
+    Fall detection IS included because it drives critical caregiver alerts.
+    """
     def __init__(self):
         self.clients = set()
-        self.fusion = FusionPipeline()
-        self.model = DistributedInference()
-        self.bundle_queue = asyncio.Queue(maxsize=100)
+        self.fusion  = FusionPipeline()
+        self.model   = DistributedInference()
+        self.fall_detector = _FallDetector()
+        self.bundle_queue  = asyncio.Queue(maxsize=100)
         
     async def handle_client(self, ws: WebSocket):
         await ws.accept()
@@ -79,13 +87,18 @@ class HighThroughputServer:
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
 
-            # 4. Smart-home bridge publish (analytics not available in v2 — pass skeleton count only)
+            # 4. Minimal analytics — fall detection only (enough for caregiver alerts)
             person_count = len(skeletons[0]) if skeletons and skeletons[0] else 0
+            if skeletons and skeletons[0]:
+                self.fall_detector.push_skeleton(skeletons[0][0])
+            fall_result = self.fall_detector.detect()
+            minimal_analytics = {"fall": fall_result}
+
             if _ha_bridge_v2:
-                await _ha_bridge_v2.publish({}, person_count)
+                await _ha_bridge_v2.publish(minimal_analytics, person_count)
             if _matter_bridge_v2:
-                await _matter_bridge_v2.publish({}, person_count)
-            await _webhook_manager_v2.process_frame({}, person_count)
+                await _matter_bridge_v2.publish(minimal_analytics, person_count)
+            await _webhook_manager_v2.process_frame(minimal_analytics, person_count)
 
             self.bundle_queue.task_done()
 
@@ -131,11 +144,19 @@ class HighThroughputServer:
 
 server = HighThroughputServer()
 
+import ipaddress as _ipaddress
+
+_TRUSTED_PROXIES_V2: frozenset = frozenset(
+    x.strip() for x in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",") if x.strip()
+)
+
 def _client_ip(request: Request) -> str:
-    """Extract client IP safely — works behind nginx/k8s ingress where request.client may be None."""
-    if request.client is not None:
-        return request.client.host
-    return request.headers.get("X-Forwarded-For", "unknown").split(",")[0].strip()
+    peer = request.client.host if request.client else None
+    if peer is None or peer in _TRUSTED_PROXIES_V2:
+        forwarded = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded
+    return peer or "unknown"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -189,8 +210,8 @@ async def ingest_bundle(bundle: dict, request: Request, _key: str = Depends(veri
     return {"status": "queued"}
 
 @app.get("/health")
-async def health(request: Request):
-    await limiter.check_rate_limit(_client_ip(request))
+async def health():
+    # No rate limiting — K8s liveness probes hit this from same IP continuously.
     return {
         "status": "ok",
         "ui_clients": len(server.clients),

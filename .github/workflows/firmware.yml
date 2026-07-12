@@ -1,0 +1,91 @@
+name: Build ESP32-S3 Firmware
+
+on:
+  push:
+    tags:
+      - "v*"
+    paths:
+      - "firmware/**"
+  pull_request:
+    paths:
+      - "firmware/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build firmware (ESP-IDF v5.3 / ESP32-S3)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.3
+          target: esp32s3
+          path: firmware
+          command: idf.py build
+
+      - name: Collect binaries
+        run: |
+          mkdir -p firmware-release
+          cp firmware/build/echopose_firmware.bin          firmware-release/ 2>/dev/null || \
+          cp firmware/build/*.bin                          firmware-release/
+          cp firmware/build/bootloader/bootloader.bin      firmware-release/ 2>/dev/null || true
+          cp firmware/build/partition_table/partition-table.bin firmware-release/ 2>/dev/null || true
+          # Write a flash command for non-developers
+          cat > firmware-release/FLASH.sh <<'EOF'
+          #!/bin/bash
+          # Flash EchoPose firmware to ESP32-S3
+          # Usage: ./FLASH.sh /dev/ttyUSB0
+          PORT=${1:-/dev/ttyUSB0}
+          esptool.py --chip esp32s3 --port "$PORT" --baud 460800 write_flash \
+            0x0     bootloader.bin \
+            0x8000  partition-table.bin \
+            0x10000 echopose_firmware.bin
+          EOF
+          chmod +x firmware-release/FLASH.sh
+
+      - name: Upload build artifacts (PRs)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: firmware-release/
+          retention-days: 7
+
+      - name: Create GitHub Release with firmware binaries
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: firmware-release/*
+          body: |
+            ## EchoPose Firmware ${{ github.ref_name }}
+
+            ### Flash instructions
+
+            **Option A — automatic (recommended):**
+            ```bash
+            pip install esptool
+            # Download all files from this release to a folder, then:
+            ./FLASH.sh /dev/ttyUSB0     # Linux / Mac
+            ./FLASH.sh COM3             # Windows
+            ```
+
+            **Option B — ESP-IDF:**
+            ```bash
+            git clone https://github.com/shaz-in-dev/EchoPose
+            cd EchoPose/firmware
+            idf.py -p /dev/ttyUSB0 flash
+            ```
+
+            See [firmware/FLASHING_GUIDE.md](firmware/FLASHING_GUIDE.md) for full instructions.
+
+            ### What's new
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

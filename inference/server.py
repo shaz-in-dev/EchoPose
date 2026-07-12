@@ -34,6 +34,7 @@ import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from pydantic import ValidationError
 
 from pipeline.fusion import FusionPipeline
 from pipeline.pose   import PoseEstimator
@@ -67,6 +68,7 @@ from security import limiter, verify_api_key, IncomingCSIBundle, LicenseTier, re
 from integrations.homeassistant import HAConfig, HomeAssistantBridge
 from integrations.matter import MatterBridge
 from integrations.webhooks import WebhookManager, EventType
+from integrations.session_store import SessionStore
 from pipeline.fast_adapt import FastAdapter
 from pipeline.pose_net_v2 import PoseNetV2
 
@@ -90,6 +92,13 @@ async def lifespan(app):
 
     # Caregiver alert system (always starts — reads channels from .env)
     await _webhook_manager.start()
+
+    # Restore last_activity_ts from DB so inactivity timer survives restarts
+    saved_activity = _session_store.get_state("last_activity_ts")
+    if saved_activity:
+        _webhook_manager._last_activity_ts = float(saved_activity)
+        logger.info("Restored last_activity_ts from session DB (%.0f s ago)",
+                    time.time() - _webhook_manager._last_activity_ts)
 
     # Home Assistant MQTT bridge (opt-in via HA_MQTT_BROKER env var)
     ha_cfg = HAConfig.from_env()
@@ -169,6 +178,9 @@ _matter_bridge: MatterBridge | None = None
 
 # ── Caregiver alert / webhook manager ────────────────────────────────
 _webhook_manager = WebhookManager()
+
+# ── Session history store (SQLite — survives server restarts) ─────────
+_session_store = SessionStore()
 
 # ── LoRA fast-adapt ───────────────────────────────────────────────────
 _fast_adapter: FastAdapter | None = None
@@ -254,6 +266,7 @@ async def connect_and_process(fusion_pipeline):
             try:
                 start_time = time.time()
                 bundle = json.loads(raw)
+                IncomingCSIBundle(**bundle)  # raises ValidationError on malformed/oversized bundle
                 features, per_person = fusion_pipeline.process_bundle(bundle)
                 skeletons = estimator.predict(features, per_person_features=per_person)
                 smoothed_skeletons = skeleton_filter.filter(skeletons)
@@ -402,6 +415,10 @@ async def connect_and_process(fusion_pipeline):
                 # Caregiver alerts (fall, inactivity, vitals, presence)
                 await _webhook_manager.process_frame(analytics, len(smoothed_skeletons))
 
+                # Persist analytics to SQLite session store
+                _session_store.maybe_log_vitals(analytics, len(smoothed_skeletons))
+                _session_store.set_state("last_activity_ts", _webhook_manager._last_activity_ts)
+
                 # Push raw CSI into LoRA adapter buffer for future /adapt calls
                 if _fast_adapter is not None:
                     for f in bundle.get("frames", []):
@@ -419,6 +436,10 @@ async def connect_and_process(fusion_pipeline):
 
             except json.JSONDecodeError as e:
                 logger.error(f"Invalid JSON from aggregator: {e}")
+                sys_metrics.record_drop()
+                continue
+            except ValidationError as e:
+                logger.error(f"Malformed CSI bundle from aggregator: {e}")
                 sys_metrics.record_drop()
                 continue
             except Exception as e:
@@ -451,16 +472,33 @@ async def ws_pose(ws: WebSocket):
 
 
 # ── REST ──────────────────────────────────────────────────────────
+_TRUSTED_PROXIES: frozenset[str] = frozenset(
+    x.strip() for x in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",") if x.strip()
+)
+
 def _client_ip(request: Request) -> str:
-    """Extract client IP safely — works behind nginx/k8s ingress where request.client may be None."""
-    if request.client is not None:
-        return request.client.host
-    return request.headers.get("X-Forwarded-For", "unknown").split(",")[0].strip()
+    """Extract real client IP, only trusting X-Forwarded-For from known proxies.
+
+    Without this guard, any client can spoof X-Forwarded-For to bypass per-IP
+    rate limiting. Set TRUSTED_PROXIES to your nginx/k8s ingress IP(s).
+
+    When request.client is None (behind a Unix-socket proxy or certain load
+    balancers), X-Forwarded-For is the only source available and is used as-is.
+    """
+    peer = request.client.host if request.client else None
+    # Trust X-Forwarded-For when: (a) peer is from a known proxy, or
+    # (b) peer is None (we have no TCP-level IP to validate against)
+    if peer is None or peer in _TRUSTED_PROXIES:
+        forwarded = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded
+    return peer or "unknown"
 
 
 @app.get("/health")
-async def health(request: Request):
-    await limiter.check_rate_limit(_client_ip(request))
+async def health():
+    # No rate limiting — K8s liveness/readiness probes hit this endpoint
+    # from the same IP every few seconds and would trip the limiter.
     return {"status": "ok", "ui_clients": manager.count}
 
 
@@ -550,6 +588,34 @@ async def caregiver_status(request: Request):
         "fall_detected":        (analytics.get("fall") or {}).get("fall_detected", False),
         "alert_channels":       {k: v for k, v in channels.items() if k != "last_activity_ago_s"},
     }
+
+
+@app.get("/history/events")
+async def history_events(request: Request, hours: float = 24.0, limit: int = 200):
+    """Return recent caregiver alert events from the SQLite session store.
+
+    ?hours=24  — look-back window (default 24 h)
+    ?limit=200 — max rows returned
+    """
+    await limiter.check_rate_limit(_client_ip(request))
+    return {"events": _session_store.get_events(hours=hours, limit=limit)}
+
+
+@app.get("/history/vitals")
+async def history_vitals(request: Request, hours: float = 24.0, limit: int = 500):
+    """Return vitals timeline from the SQLite session store.
+
+    Snapshots are taken every SESSION_VITALS_INTERVAL_S seconds (default 5 min).
+    """
+    await limiter.check_rate_limit(_client_ip(request))
+    return {"vitals": _session_store.get_vitals(hours=hours, limit=limit)}
+
+
+@app.get("/history/summary")
+async def history_summary(request: Request):
+    """Return session store summary — total events, last fall, DB path."""
+    await limiter.check_rate_limit(_client_ip(request))
+    return _session_store.summary()
 
 
 @app.get("/license")

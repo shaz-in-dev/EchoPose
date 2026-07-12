@@ -32,6 +32,11 @@ impl LocalizationSolver {
             .insert(from_node, rssi);
     }
 
+    /// Look up the most recent RSSI reading `seen_by_node` recorded for `from_node`.
+    pub fn get_rssi(&self, seen_by_node: u8, from_node: u8) -> Option<i16> {
+        self.rssi_matrix.get(&seen_by_node)?.get(&from_node).copied()
+    }
+
     /// Evict entries for nodes no longer in the active set, preventing unbounded growth.
     pub fn evict_stale_nodes(&mut self, active_node_ids: &[u8]) {
         let active: std::collections::HashSet<u8> = active_node_ids.iter().copied().collect();

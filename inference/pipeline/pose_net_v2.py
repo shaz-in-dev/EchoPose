@@ -17,6 +17,10 @@ EXPECTED_NODES  = int(os.getenv("EXPECTED_NODES", "3"))
 NUM_KEYPOINTS   = 17
 MAX_PEOPLE      = 3  # Multi-person support
 FEATURE_SHAPE   = (EXPECTED_NODES, 64, 16)   # (nodes, subcarriers, doppler_bins)
+# World-space coordinates (from the Kinect recorder) are in metres and can be
+# negative or exceed 1.0. ROOM_COORD_RANGE_M bounds the regression head's x/y/z
+# output via tanh so the model can actually represent real room coordinates.
+ROOM_COORD_RANGE_M = float(os.getenv("ROOM_COORD_RANGE_M", "8.0"))
 
 class PoseNetV2(nn.Module):
     """
@@ -55,15 +59,16 @@ class PoseNetV2(nn.Module):
         )
         
         # Stage 4: Multi-Person Pose Regression Heads
-        # Outputs [B, MAX_PEOPLE, 17, 4] directly
+        # Outputs [B, MAX_PEOPLE, 17, 4] raw; x/y/z and confidence are squashed
+        # separately in forward() since they have different valid ranges
+        # (world-space metres vs. a [0,1] probability).
         self.pose_head = nn.Sequential(
             nn.Linear(256, 1024),
             nn.GELU(),
             nn.Dropout(0.3),
             nn.Linear(1024, 512),
             nn.GELU(),
-            nn.Linear(512, MAX_PEOPLE * NUM_KEYPOINTS * 4), 
-            nn.Sigmoid() # Normalize coordinates to [0,1] screen space
+            nn.Linear(512, MAX_PEOPLE * NUM_KEYPOINTS * 4),
         )
 
     def _make_layer(self, in_c, out_c, kernel_size):
@@ -118,7 +123,12 @@ class PoseNetV2(nn.Module):
         context = torch.mean(attn_out, dim=1) # [B, 256]
         
         # Pose Regression
-        poses = self.pose_head(context) # [B, MAX_PEOPLE * 17 * 4]
-        
-        # Reshape to distinct skeletons
-        return poses.view(B, MAX_PEOPLE, NUM_KEYPOINTS, 4)
+        raw = self.pose_head(context) # [B, MAX_PEOPLE * 17 * 4]
+        raw = raw.view(B, MAX_PEOPLE, NUM_KEYPOINTS, 4)
+
+        # x/y/z are world-space metres (can be negative or >1) — bound them to
+        # +/- ROOM_COORD_RANGE_M via tanh instead of squashing through sigmoid.
+        # confidence is an independent [0,1] probability.
+        xyz = torch.tanh(raw[..., :3]) * ROOM_COORD_RANGE_M
+        confidence = torch.sigmoid(raw[..., 3:4])
+        return torch.cat([xyz, confidence], dim=-1)

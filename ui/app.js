@@ -25,8 +25,24 @@ const btnLocalize = document.getElementById('btn-localize');
 const btnDemo     = document.getElementById('btn-demo');
 
 // ── Renderers ─────────────────────────────────────────────────────
-const skeleton = new SkeletonRenderer('skeleton-canvas');
-const heatmap  = new CsiHeatmap('heatmap-canvas', 'heatmap-node');
+// A renderer failure (e.g. WebGL unavailable) must not take down the whole
+// dashboard — fall back to a no-op stub so analytics/connect still work.
+const skeleton = (() => {
+  try {
+    return new SkeletonRenderer('skeleton-canvas');
+  } catch (e) {
+    console.warn('3D renderer unavailable — running without skeleton view:', e);
+    return { updateSkeletons() {}, updateNodes() {}, setAutoRotate() {}, resetCamera() {} };
+  }
+})();
+const heatmap = (() => {
+  try {
+    return new CsiHeatmap('heatmap-canvas', 'heatmap-node');
+  } catch (e) {
+    console.warn('Heatmap unavailable:', e);
+    return { push() {} };
+  }
+})();
 
 // ── State ─────────────────────────────────────────────────────────
 let ws         = null;
@@ -52,10 +68,57 @@ function tick() {
   }
 }
 
+// ── Stale-data watchdog ───────────────────────────────────────────
+let lastFrameTs = 0;
+const staleOverlay = document.getElementById('stale-overlay');
+const staleAge     = document.getElementById('stale-age');
+
+setInterval(() => {
+  if (!staleOverlay) return;
+  // Only meaningful while connected and not in demo mode
+  if (demoMode || !ws || ws.readyState !== WebSocket.OPEN || !lastFrameTs) {
+    staleOverlay.classList.add('hidden');
+    return;
+  }
+  const age = (performance.now() - lastFrameTs) / 1000;
+  if (age > 3) {
+    if (staleAge) staleAge.textContent = age.toFixed(0);
+    staleOverlay.classList.remove('hidden');
+  } else {
+    staleOverlay.classList.add('hidden');
+  }
+}, 1000);
+
+// ── Critical alert banner ─────────────────────────────────────────
+const alertBanner     = document.getElementById('alert-banner');
+const alertBannerText = document.getElementById('alert-banner-text');
+const alertDismissBtn = document.getElementById('alert-banner-dismiss');
+let alertDismissedAt  = 0;
+
+if (alertDismissBtn) {
+  alertDismissBtn.addEventListener('click', () => {
+    alertDismissedAt = Date.now();
+    alertBanner.classList.add('hidden');
+  });
+}
+
+function showCriticalAlert(text) {
+  if (!alertBanner) return;
+  // Respect a dismissal for 60 s so the banner doesn't immediately reappear
+  if (Date.now() - alertDismissedAt < 60_000) return;
+  alertBannerText.textContent = text;
+  alertBanner.classList.remove('hidden');
+}
+
+function clearCriticalAlert() {
+  if (alertBanner) alertBanner.classList.add('hidden');
+}
+
 // ── Handle a pose frame ───────────────────────────────────────────
 function handleFrame(data) {
   if (typeof recordFrame === 'function') recordFrame(data);
   tick();
+  lastFrameTs = performance.now();
 
   // Show simulation mode indicator
   if (data.simulation) {
@@ -67,7 +130,8 @@ function handleFrame(data) {
   if (data.skeletons) {
     skeleton.updateSkeletons(data.skeletons);
     if (data.skeletons[0]) updateKpTable(data.skeletons[0]);
-  } 
+    MetricsChart.push(data.skeletons);
+  }
   
   if (data.amplitudes) {
     // Use WASM normalisation if available (gracefully falls back to JS)
@@ -131,7 +195,7 @@ function updateTactical(t) {
       + (level === 'RED' ? ' acard-big--critical' : '')
       + (level === 'YELLOW' ? ' acard-big--warning' : '');
   }
-  setText('t-target-count', tgt.target_count || 0);
+  setText('t-target-count', tgt.targets_detected ?? tgt.target_count ?? 0);
   const targets = tgt.targets || [];
   setText('t-target-type', targets.length ? targets[0].classification || '--' : '--');
 
@@ -188,7 +252,8 @@ function updateTactical(t) {
       + (il === 'ACCESS_WEAPON' || il === 'FLEE' ? ' acard-big--warning' : '');
   }
   const intentBar = document.getElementById('t-intent-bar');
-  const intentScore = (intent.attack_probability || 0) * 100;
+  // Server emits scores.attack (0-1); attack_probability kept for old recordings
+  const intentScore = ((intent.scores && intent.scores.attack) ?? intent.attack_probability ?? 0) * 100;
   if (intentBar) intentBar.style.width = `${intentScore}%`;
   setText('t-intent-score', `${intentScore.toFixed(0)}%`);
 
@@ -244,6 +309,7 @@ function updateAnalytics(a) {
     if (fall.fall_detected) {
       fallEl.textContent = 'FALL!';
       fallEl.className = 'acard-big acard-big--critical';
+      showCriticalAlert('⚠ FALL DETECTED — check on the person now');
     } else {
       fallEl.textContent = 'Safe';
       fallEl.className = 'acard-big';
@@ -283,6 +349,9 @@ function updateAnalytics(a) {
       + (alerts.alert_level === 'CRITICAL' ? ' acard-big--critical' : '')
       + (alerts.alert_level === 'WARNING'  ? ' acard-big--warning' : '');
   }
+  if (alerts.alert_level === 'CRITICAL' && alerts.anomalies && alerts.anomalies.length) {
+    showCriticalAlert(`⚠ HEALTH ALERT — ${alerts.anomalies[0]}`);
+  }
   const alertList = document.getElementById('v-alert-list');
   if (alertList) {
     alertList.innerHTML = '';
@@ -301,6 +370,74 @@ function updateAnalytics(a) {
     }
   }
 }
+
+// ── Signal Metrics sparkline ──────────────────────────────────────
+// Rolling chart of frame rate (cyan) and mean keypoint confidence (green).
+const MetricsChart = (() => {
+  const canvas = document.getElementById('metrics-canvas');
+  if (!canvas) return { push: () => {} };
+  const ctx = canvas.getContext('2d');
+  const N = 120;                       // ~2 min of history at 1 sample/s
+  const fpsHist  = new Float32Array(N);
+  const confHist = new Float32Array(N);
+  let head = 0, samples = 0;
+
+  // Sample once per second from live counters
+  let secFrames = 0, secConfSum = 0, secConfN = 0;
+
+  setInterval(() => {
+    fpsHist[head]  = secFrames;
+    confHist[head] = secConfN ? secConfSum / secConfN : 0;
+    head = (head + 1) % N;
+    samples = Math.min(samples + 1, N);
+    secFrames = 0; secConfSum = 0; secConfN = 0;
+    draw();
+  }, 1000);
+
+  function draw() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    if (!samples) return;
+
+    const maxFps = Math.max(25, ...fpsHist);
+    const step = W / (N - 1);
+
+    const trace = (hist, max, color) => {
+      ctx.beginPath();
+      for (let i = 0; i < samples; i++) {
+        const idx = (head - samples + i + N) % N;
+        const x = W - (samples - 1 - i) * step;
+        const y = H - 4 - (hist[idx] / max) * (H - 14);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    };
+
+    trace(fpsHist,  maxFps, '#38bdf8');   // frame rate
+    trace(confHist, 1.0,    '#34d399');   // confidence 0-1
+
+    ctx.font = '9px JetBrains Mono';
+    ctx.fillStyle = '#38bdf8';
+    const last = (head - 1 + N) % N;
+    ctx.fillText(`${fpsHist[last].toFixed(0)} fps`, 6, 12);
+    ctx.fillStyle = '#34d399';
+    ctx.fillText(`conf ${(confHist[last] * 100).toFixed(0)}%`, 6, 24);
+  }
+
+  return {
+    push(skeletons) {
+      secFrames++;
+      if (skeletons && skeletons[0]) {
+        for (const kp of skeletons[0]) {
+          const c = Number(kp.confidence);
+          if (isFinite(c)) { secConfSum += c; secConfN++; }
+        }
+      }
+    },
+  };
+})();
 
 function setText(id, val) {
   const el = document.getElementById(id);
@@ -340,10 +477,13 @@ async function pollNodes() {
       if (age_ms >= 0 && age_ms < 5000) active++;
     }
     nodeCount.textContent = active;
+    nodeCount.parentElement.title = `${active} node(s) seen in the last 5 s`;
   } catch (e) {
-    console.warn(`Node polling failed: ${e.message}`);
-    statusBadge.textContent = 'Polling Error';
-    statusBadge.className = 'badge badge--disconnected';
+    // The aggregator HTTP endpoint being unreachable must NOT clobber the
+    // inference-server connection badge — they are independent services.
+    // Show the degraded state on the node pill instead.
+    nodeCount.textContent = '?';
+    nodeCount.parentElement.title = 'Aggregator not reachable — node count unavailable';
   }
 }
 
@@ -443,7 +583,13 @@ function connect(uri) {
     clearInterval(nodePollingInterval);
     nodePollingInterval = setInterval(pollNodes, 1000);
 
-    if (intendedDisconnect || demoMode) {
+    if (demoMode) {
+      // Demo mode is intentionally offline — keep the Demo badge
+      statusBadge.textContent = 'Demo';
+      statusBadge.className   = 'badge badge--connected';
+      return;
+    }
+    if (intendedDisconnect) {
       statusBadge.textContent = 'Disconnected';
       statusBadge.className   = 'badge badge--disconnected';
       return;
@@ -500,6 +646,7 @@ function demoTick() {
   // V3 update asks for an array of skeletons
   skeleton.updateSkeletons([kps]);
   updateKpTable(kps);
+  MetricsChart.push([kps]);
   tick();
   // Fake heatmap data for demo
   heatmap.push({
@@ -554,6 +701,12 @@ function demoTick() {
 
 function startDemo() {
   demoMode  = true;
+  // Cancel any pending reconnect and close a live socket — demo is offline
+  clearTimeout(reconnectTimer);
+  if (ws && ws.readyState !== WebSocket.CLOSED) {
+    intendedDisconnect = true;
+    ws.close();
+  }
   demoTimer = setInterval(demoTick, 50);  // 20 Hz
   btnDemo.classList.add('active');
   statusBadge.textContent = 'Demo';

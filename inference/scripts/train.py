@@ -49,13 +49,27 @@ class CSIPoseDataset(Dataset):
 
 
 def train(args):
+    npz_path = Path(args.data) if args.data else None
+    using_synthetic = not (npz_path and npz_path.exists())
+
+    if using_synthetic and not args.allow_synthetic:
+        raise SystemExit(
+            "Refusing to train on synthetic random data without --allow-synthetic.\n"
+            "A checkpoint trained this way learns nothing about real CSI-to-pose mapping\n"
+            "(random in, random out) and must never be shipped or deployed as pose_net.pt.\n"
+            "Pass --data path/to/dataset.npz with real collected sessions, or pass\n"
+            "--allow-synthetic explicitly if you only want to smoke-test the architecture."
+        )
+    if using_synthetic:
+        print(
+            "WARNING: training on synthetic random data (architecture smoke-test only). "
+            "The resulting checkpoint has zero real-world accuracy — do not deploy it."
+        )
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PoseNetV2().to(device)
 
-    dataset = CSIPoseDataset(
-        npz_path=Path(args.data) if args.data else None,
-        size=args.synth_size,
-    )
+    dataset = CSIPoseDataset(npz_path=npz_path, size=args.synth_size)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -64,6 +78,9 @@ def train(args):
 
     ckpt_dir = Path(__file__).parent.parent / "models"
     ckpt_dir.mkdir(exist_ok=True)
+    # Synthetic-smoketest runs write to a clearly-labeled filename so they can
+    # never be mistaken for (or silently overwrite) a real trained checkpoint.
+    ckpt_name = "pose_net.synthetic_smoketest.pt" if using_synthetic else "pose_net.pt"
 
     best_loss = float("inf")
 
@@ -92,8 +109,8 @@ def train(args):
 
         if avg_loss < best_loss:
             best_loss = avg_loss
-            torch.save(model.state_dict(), ckpt_dir / "pose_net.pt")
-            print(f"  -> Saved best checkpoint (loss={best_loss:.6f})")
+            torch.save(model.state_dict(), ckpt_dir / ckpt_name)
+            print(f"  -> Saved best checkpoint to {ckpt_name} (loss={best_loss:.6f})")
 
     print("Training complete.")
 
@@ -105,6 +122,9 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--synth-size", type=int, default=256, help="Synthetic dataset size if no real data")
+    parser.add_argument("--allow-synthetic", action="store_true",
+                         help="Permit training on synthetic random data (architecture smoke-test "
+                              "only; the resulting checkpoint is not usable for real inference)")
     args = parser.parse_args()
 
     train(args)

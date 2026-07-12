@@ -91,7 +91,35 @@ spec:
         - name: EXPECTED_NODES
           value: "3"
         - name: INFERENCE_DEVICE
-          value: "cpu"  # Switch to "cuda" only after building inference/Dockerfile.gpu (nvidia/cuda base)
+          value: "cpu"          # Switch to "cuda" after building Dockerfile.gpu
+        - name: MATTER_HOST
+          value: "matter-bridge"
+        - name: TRUSTED_PROXIES
+          value: "10.0.0.0/8,172.16.0.0/12"
+        - name: LORA_ADAPT
+          value: "false"
+        - name: INACTIVITY_ALERT_MINUTES
+          value: "240"
+        - name: ROOM_AREA_M2
+          value: "25.0"
+        - name: ECHOPOSE_LICENSE_MODE
+          value: "permissive"
+        - name: PUSHOVER_APP_TOKEN
+          valueFrom: {secretKeyRef: {name: echopose-alerts, key: pushover_app_token, optional: true}}
+        - name: PUSHOVER_USER_KEY
+          valueFrom: {secretKeyRef: {name: echopose-alerts, key: pushover_user_key, optional: true}}
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom: {secretKeyRef: {name: echopose-alerts, key: telegram_bot_token, optional: true}}
+        - name: TELEGRAM_CHAT_ID
+          valueFrom: {secretKeyRef: {name: echopose-alerts, key: telegram_chat_id, optional: true}}
+        - name: WEBHOOK_URLS
+          valueFrom: {secretKeyRef: {name: echopose-alerts, key: webhook_urls, optional: true}}
+        - name: HA_MQTT_BROKER
+          valueFrom: {configMapKeyRef: {name: echopose-config, key: ha_mqtt_broker, optional: true}}
+        - name: ECHOPOSE_LICENSE_KEY
+          valueFrom: {secretKeyRef: {name: echopose-license, key: license_key, optional: true}}
+        - name: ECHOPOSE_API_TOKEN
+          valueFrom: {secretKeyRef: {name: echopose-auth, key: api_token, optional: true}}
         livenessProbe:
           httpGet:
             path: /health

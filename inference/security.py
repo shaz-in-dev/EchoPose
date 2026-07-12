@@ -80,9 +80,14 @@ class LicenseTier(enum.IntEnum):
 _LICENSE_KEY_RE = re.compile(r"^EP-(CM|PR|EN|DF)-([A-Z0-9]{8})-([A-Z0-9]{8})$")
 
 _LICENSE_SECRET = os.getenv("ECHOPOSE_LICENSE_SECRET", "dev-secret-change-me")
-_LICENSE_MODE   = os.getenv("ECHOPOSE_LICENSE_MODE", "permissive").lower()
 # "permissive" = log warnings but never block (good for dev)
 # "enforced"   = reject requests that exceed the tier
+# Default follows ECHOPOSE_ENV the same way the API token does above: production
+# deployments enforce tiers unless the operator explicitly opts back into
+# permissive mode. Without this, a forgotten env var would ship every paid
+# feature unlocked to every deployment, license key or not.
+_default_license_mode = "enforced" if _is_production else "permissive"
+_LICENSE_MODE = os.getenv("ECHOPOSE_LICENSE_MODE", _default_license_mode).lower()
 
 
 def _compute_hmac(tier_short: str, key_id: str) -> str:
@@ -101,7 +106,7 @@ def verify_license_key(key: str) -> LicenseTier:
     if not m:
         raise ValueError(
             "Invalid license key format. Expected EP-{TIER}-{ID}-{HMAC}. "
-            "Purchase a key at https://echopose.io/license"
+            "Purchase a key at https://github.com/shaz-in-dev/EchoPose"
         )
     tier_short, key_id, provided_hmac = m.group(1), m.group(2), m.group(3)
     expected_hmac = _compute_hmac(tier_short, key_id)
@@ -126,7 +131,7 @@ else:
     if _is_production and _LICENSE_MODE == "enforced":
         logger.warning(
             "No ECHOPOSE_LICENSE_KEY set in enforced mode. "
-            "Restricted features will return 402. Buy at https://echopose.io/license"
+            "Restricted features will return 402. Buy at https://github.com/shaz-in-dev/EchoPose"
         )
 
 
@@ -152,7 +157,7 @@ def require_tier(minimum: LicenseTier):
                 detail=(
                     f"This feature requires a {minimum.label()} license or higher. "
                     f"Your active tier: {_active_tier.label()}. "
-                    "Purchase a license at https://echopose.io/license"
+                    "Purchase a license at https://github.com/shaz-in-dev/EchoPose"
                 ),
             )
     return _check

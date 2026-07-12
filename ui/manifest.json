@@ -37,5 +37,14 @@
       "url": "./mobile.html#tactical"
     }
   ],
-  "screenshots": []
+  "screenshots": [
+    {
+      "label": "Caregiver dashboard — vitals, fall detection, live activity",
+      "form_factor": "narrow"
+    },
+    {
+      "label": "3D pose skeleton — real-time WiFi body tracking",
+      "form_factor": "wide"
+    }
+  ]
 }

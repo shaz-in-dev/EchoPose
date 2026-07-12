@@ -71,6 +71,10 @@ struct AppState {
     udp_port: u16,
     http_port: u16,
     expected_nodes: usize,
+    /// Amplitude-to-RSSI baseline offset (dB). Starts from RSSI_OFFSET_DB env var
+    /// (default -50, the old hardcoded placeholder) and can be recalibrated live
+    /// via POST /calibrate/rssi without restarting the process.
+    rssi_offset_db: Arc<RwLock<f32>>,
 }
 
 #[tokio::main]
@@ -129,7 +133,14 @@ async fn main() -> anyhow::Result<()> {
     let calibration_udp = calibration.clone();
     let localization = Arc::new(RwLock::new(localize::LocalizationSolver::new()));
     let localization_udp = localization.clone();
-    
+
+    let initial_rssi_offset: f32 = std::env::var("RSSI_OFFSET_DB")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(-50.0);
+    let rssi_offset_db = Arc::new(RwLock::new(initial_rssi_offset));
+    let rssi_offset_db_udp = rssi_offset_db.clone();
+
     // ── Unified Denoising ─────────────────────────────────────────
     let mut rolling_denoiser = denoise::RollingDenoiser::new();
     
@@ -179,9 +190,11 @@ async fn main() -> anyhow::Result<()> {
                     let mut loc = localization_udp.write().await;
                     // Use raw amplitude BEFORE denoising for RSSI estimation.
                     // Each node reports its own amplitudes, so the "seen_by" node IS frame.node_id.
-                    // The constant offset (-50) is a placeholder; calibrate per hardware deployment.
+                    // The offset starts from RSSI_OFFSET_DB (default -50, a placeholder) and can
+                    // be recalibrated live via POST /calibrate/rssi.
+                    let offset_db = *rssi_offset_db_udp.read().await;
                     let mean_amp = frame.amplitudes.iter().sum::<f32>() / frame.amplitudes.len() as f32;
-                    let rssi = (20.0 * mean_amp.max(1e-6).log10()) as i16 - 50;
+                    let rssi = (20.0 * mean_amp.max(1e-6).log10() + offset_db) as i16;
                     let seen_by = frame.node_id; // correct: each node reports its own measurement
                     loc.record_rssi(frame.node_id, seen_by, rssi);
                     // Evict stale nodes to prevent rssi_matrix from growing unbounded
@@ -247,14 +260,15 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // ── Axum HTTP + WebSocket server ──────────────────────────────
-    let state = AppState { 
-        tx, 
-        tracker, 
+    let state = AppState {
+        tx,
+        tracker,
         calibration,
         localization,
-        udp_port, 
-        http_port, 
+        udp_port,
+        http_port,
         expected_nodes,
+        rssi_offset_db,
     };
 
     let origins: Vec<axum::http::HeaderValue> = std::env::var("ALLOWED_ORIGINS")
@@ -345,11 +359,13 @@ async fn localize_handler(State(state): State<Arc<AppState>>) -> impl IntoRespon
 async fn config_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     use crate::sync::WINDOW_US;
     let window_us = *WINDOW_US.get().unwrap_or(&50_000);
+    let rssi_offset_db = *state.rssi_offset_db.read().await;
     Json(serde_json::json!({
         "udp_port":       state.udp_port,
         "http_port":      state.http_port,
         "expected_nodes": state.expected_nodes,
         "window_ms":      window_us / 1_000,
+        "rssi_offset_db": rssi_offset_db,
     }))
 }
 
@@ -411,14 +427,51 @@ async fn calibrate_rssi(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RssiCalibRequest>,
 ) -> impl IntoResponse {
-    let _loc = state.localization.read().await;
-    // Log the calibration reference point
-    info!("RSSI calibration reference: node {} ↔ node {} = {:.2}m", req.node_a, req.node_b, req.distance_m);
+    if req.distance_m <= 0.0 {
+        return Json(serde_json::json!({
+            "status": "error",
+            "detail": "distance_m must be positive"
+        }));
+    }
+
+    // Need an existing RSSI observation between the two nodes to calibrate against.
+    // Try both directions since either node may have "seen" the other first.
+    let observed_rssi = {
+        let loc = state.localization.read().await;
+        loc.get_rssi(req.node_b, req.node_a)
+            .or_else(|| loc.get_rssi(req.node_a, req.node_b))
+    };
+
+    let Some(observed_rssi) = observed_rssi else {
+        return Json(serde_json::json!({
+            "status": "no_data",
+            "detail": "No RSSI observed yet between these nodes — make sure both are streaming CSI, then retry."
+        }));
+    };
+
+    // Same log-distance model as localize.rs's target_dist: target_dist = 10^((-40 - rssi) / 20)
+    // Solve for the RSSI that would make target_dist equal the measured reference distance.
+    let target_rssi = -40.0 - 20.0 * req.distance_m.log10();
+    let delta = target_rssi - observed_rssi as f32;
+
+    let new_offset = {
+        let mut offset = state.rssi_offset_db.write().await;
+        *offset += delta;
+        *offset
+    };
+
+    info!(
+        "RSSI calibrated: node {} <-> node {} = {:.2}m (observed {} dB, target {:.1} dB) -> offset now {:.1} dB — applied immediately",
+        req.node_a, req.node_b, req.distance_m, observed_rssi, target_rssi, new_offset
+    );
+
     Json(serde_json::json!({
-        "status": "recorded",
+        "status": "calibrated",
         "node_a": req.node_a,
         "node_b": req.node_b,
         "distance_m": req.distance_m,
-        "note": "Restart aggregator with RSSI_OFFSET_DB env var calibrated to this measurement"
+        "observed_rssi_db": observed_rssi,
+        "rssi_offset_db": new_offset,
+        "note": "Applied immediately, no restart needed. Set RSSI_OFFSET_DB env var to this value to persist it across restarts."
     }))
 }
