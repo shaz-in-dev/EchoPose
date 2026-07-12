@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.2] — 2026-07-12
+
+### Fixed
+
+- `echopose_sdk/README.md` (and therefore the PyPI project description) was
+  still the original scaffold placeholder ("Initial features: validate CSI
+  bundle shape...") despite the SDK having grown to 8 real modules (`csi`,
+  `skeleton`, `metrics`, `streaming`, `validation`, `quality`, `alerts`,
+  `cli`). Replaced with an accurate description covering every module,
+  verified example-by-example against the actual function signatures.
+- `echopose-sdk` version bump to 0.2.2 to ship the corrected PyPI listing.
+
 ## [0.3.1] — 2026-07-12
 
 ### Fixed — Pose Pipeline Correctness & Safety
