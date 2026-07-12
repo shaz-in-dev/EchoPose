@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "echopose-sdk"
-version = "0.2.0"
+version = "0.2.1"
 description = "WiFi CSI pose estimation toolkit — signal utilities, skeleton ops, evaluation metrics, and bundle streaming"
 readme = "README.md"
 requires-python = ">=3.10"

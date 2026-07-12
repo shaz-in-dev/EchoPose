@@ -5,6 +5,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.1] — 2026-07-12
+
+### Fixed — Pose Pipeline Correctness & Safety
+
+- **`PoseNetV2` architecture bug**: a blanket `Sigmoid` on the regression head clamped
+  world-space x/y/z coordinates to `[0,1]`, making accurate real-world pose regression
+  architecturally impossible regardless of training data quality. Coordinates are now
+  `tanh`-bounded to a configurable room-scale range; confidence remains sigmoid-bounded.
+- **Shipped model checkpoint**: `inference/models/pose_net.pt` was trained on synthetic
+  random data (noise-to-noise) and was committed to git despite a comment claiming it
+  was gitignored — every download silently shipped a "model" performing at chance level
+  while reporting `is_simulation: false`. Renamed to `pose_net.synthetic_smoketest.pt`,
+  gitignored going forward, and the server now refuses to start in simulation mode in
+  production deployments (`ECHOPOSE_ENV=production`) unless explicitly acknowledged via
+  `ALLOW_SIMULATION_MODE=true`.
+- **`pose.py`**: `is_simulation` was left uninitialized on the ONNX/optimized-inference
+  success paths, causing an `AttributeError` on every frame if either backend loaded.
+- **Aggregator `POST /calibrate/rssi`**: previously logged a reference measurement and
+  told the operator to set a `RSSI_OFFSET_DB` env var that didn't exist anywhere in the
+  codebase. Now computes and applies a live RSSI offset immediately, no restart needed.
+- **`server.py`**: incoming CSI bundles are now validated against the existing
+  `IncomingCSIBundle` schema (was defined but never invoked).
+- **`train.py`**: refuses to train on synthetic random data without `--allow-synthetic`,
+  and writes to a clearly-labeled filename instead of the production checkpoint path.
+- **`train_with_splits.py`**: the LORO/LOSO evaluation harness now actually trains and
+  evaluates a fresh model per fold; it previously always fell back to a zero-baseline
+  regardless of the `--eval-only` flag.
+- **`security.py`**: license tier enforcement now defaults to `enforced` when
+  `ECHOPOSE_ENV=production`, matching the existing API-token behavior, instead of
+  silently staying permissive.
+
+### Added
+
+- `inference/models/pose_net.sim_pretrained.pt` groundwork: a checkpoint pretrained on
+  physics-simulated CSI driven by real CMU motion-capture data, intended as a
+  `fast_adapt.py` starting point once real hardware data is collected. Not a validated
+  production model — see `inference/models/pose_net.sim_pretrained.README.md`.
+- `echopose-sdk` version bump to `0.2.1` (packaging/release alignment; no SDK API changes).
+
 ## [0.3.0] — 2026-06-10
 
 ### Added — Caregiver & Smart Home
